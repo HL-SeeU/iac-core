@@ -13,6 +13,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Infisical Loader
+        if: ${{ secrets.INFISICAL_CLIENT_ID != '' && secrets.INFISICAL_CLIENT_SECRET != '' }}
         uses: flarco/infisical-action@v4
         with:
           version: 0.166.5
