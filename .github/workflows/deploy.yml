@@ -19,10 +19,8 @@ jobs:
           client_id: ${{ secrets.INFISICAL_CLIENT_ID }}
           client_secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
           project_id: ${{ secrets.INFISICAL_PROJECT_ID }}
-          # The environment to use. If not set, will use .infisical.json
-          env: # optional
-          # The secrets path value
-          path: # optional
+          env: prod
+          path: /
           # Create a .env file in the root folder. Accepts `true` or `false`
           dotenv: # optional
           # Create a .env.sh file in the root folder. Accepts `true` or `false`
@@ -30,15 +28,15 @@ jobs:
           # Don't install python (use the system's python)
           use_system_python: # optional
 
-      - name: Cài đặt SSH Key cho GitHub Runner
+      - name: Setup SSH Key for GitHub Runner
         uses: webfactory/ssh-agent@v0.9.0
         with:
-          ssh-private-key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          ssh-private-key: ${{ env.VM_SSH_PRIVATE_KEY }}
 
-      - name: Khai báo máy chủ an toàn (Known Hosts)
+      - name: Setup Known Hosts
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan 213.35.102.21 >> ~/.ssh/known_hosts
+          ssh-keyscan ${{ env.VM_PUBLIC_IP }} >> ~/.ssh/known_hosts
 
       - name: Cài đặt Terraform
         uses: hashicorp/setup-terraform@v3
@@ -46,6 +44,6 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      - name: Terraform Apply
-        # Tự động đồng ý (auto-approve) để không bị treo log chờ xác nhận
-        run: terraform apply -auto-approve
+      # - name: Terraform Apply
+      #   # Tự động đồng ý (auto-approve) để không bị treo log chờ xác nhận
+      #   run: terraform apply -auto-approve
