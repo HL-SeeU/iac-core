@@ -1,0 +1,33 @@
+name: Deploy to Oracle VM via Terraform
+
+on:
+  push:
+    branches:
+      - main # Tự động chạy khi bạn push code lên nhánh main
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Cài đặt SSH Key cho GitHub Runner
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+
+      - name: Khai báo máy chủ an toàn (Known Hosts)
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan 213.35.102.21 >> ~/.ssh/known_hosts
+
+      - name: Cài đặt Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Apply
+        # Tự động đồng ý (auto-approve) để không bị treo log chờ xác nhận
+        run: terraform apply -auto-approve
