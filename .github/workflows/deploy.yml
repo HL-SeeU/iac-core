@@ -17,10 +17,8 @@ jobs:
         with:
           version: 0.166.5
           client_id: ${{ secrets.INFISICAL_CLIENT_ID }}
-          # The client-secret value, typically secrets.INFISICAL_CLIENT_SECRET
           client_secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
-          # The project-id or workspace-id value. If not set, will use workspaceId in .infisical.json
-          project_id: "59982e28-5adf-47a9-868e-68ebd34aed8c"
+          project_id: ${{ secrets.INFISICAL_PROJECT_ID }}
           # The environment to use. If not set, will use .infisical.json
           env: # optional
           # The secrets path value
