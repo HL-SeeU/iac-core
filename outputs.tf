@@ -1,0 +1,19 @@
+output "docker_host" {
+  value       = "ssh://${var.ssh_user}@${var.ssh_host}:${var.ssh_port}"
+  description = "Docker provider endpoint."
+}
+
+output "database_container" {
+  value       = module.database.name
+  description = "Container name for host-side database operations."
+}
+
+output "database_volume" {
+  value       = module.database.volume_name
+  description = "Protected PostgreSQL data volume."
+}
+
+output "service_urls" {
+  value       = { for name, app in var.apps : name => "https://${app.domain}" }
+  description = "Traefik HTTPS routes."
+}

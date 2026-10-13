@@ -1,0 +1,14 @@
+{
+  "services": [
+    {
+      "database": "service_a_db",
+      "role": "service_a",
+      "infisical_path": "/service-a"
+    },
+    {
+      "database": "service_b_db",
+      "role": "service_b",
+      "infisical_path": "/service-b"
+    }
+  ]
+}

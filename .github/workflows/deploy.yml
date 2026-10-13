@@ -38,7 +38,7 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan ${{ env.VM_PUBLIC_IP }} >> ~/.ssh/known_hosts
 
-      - name: Cài đặt Terraform
+      - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
@@ -47,3 +47,12 @@ jobs:
       # - name: Terraform Apply
       #   # Tự động đồng ý (auto-approve) để không bị treo log chờ xác nhận
       #   run: terraform apply -auto-approve
+
+      
+      # - uses: hashicorp/setup-terraform@v3
+      #   with:
+      #     terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      # - name: Ensure Docker, initialize and apply one workspace
+      #   shell: bash
+      #   run: bash scripts/terraform.sh apply -auto-approve -lock-timeout=5m

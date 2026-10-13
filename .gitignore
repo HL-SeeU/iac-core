@@ -1,0 +1,17 @@
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+crash.log
+crash.*.log
+*.pem
+*.key
+.env
+.env.*
+backups/
+backend*.hcl
+!backend.hcl.example
+.iac-runner.*/

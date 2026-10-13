@@ -1,43 +1,63 @@
-terraform {
-  required_providers {
-    docker = {
-      source  = "kreuzwerker/docker"
-      version = "~> 3.0"
-    }
-  }
+module "traefik" {
+  source = "./modules/traefik"
+
+  name           = "${var.name_prefix}-traefik"
+  image          = var.traefik_image
+  network        = docker_network.proxy.name
+  acme_email     = var.acme_email
+  acme_ca_server = var.acme_ca_server
+
+  depends_on = [terraform_data.host]
 }
 
-# Cấu hình Terraform kết nối vào Docker trên Oracle VM qua SSH
-provider "docker" {
-  host = "ssh://hl@213.35.102.21:22"
+module "database" {
+  source = "./modules/database"
+
+  name               = local.database_name
+  image              = var.postgres_image
+  network            = docker_network.database.name
+  password_file_path = "${var.host_root}/secrets/postgres-password"
+  memory_mb          = var.database_memory_mb
+  cpus               = var.database_cpus
+
+  depends_on = [terraform_data.postgres_secret]
 }
 
-# Triển khai thử Traefik (như đã phân tích ở trên)
-resource "docker_container" "traefik" {
-  name    = "traefik"
-  image   = "traefik:v3.0"
-  restart = "unless-stopped"
+module "apps" {
+  for_each = var.apps
+  source   = "./modules/app-container"
 
-  ports {
-    internal = 80
-    external = 80
-  }
-  ports {
-    internal = 443
-    external = 443
+  name        = "${var.name_prefix}-${each.key}"
+  image       = each.value.image
+  memory_mb   = each.value.memory_mb
+  cpus        = each.value.cpus
+  user        = each.value.user
+  command     = each.value.command
+  healthcheck = each.value.healthcheck
+  networks = concat(
+    [docker_network.proxy.name],
+    each.value.database_access ? [docker_network.database.name] : [],
+  )
+  environment = merge(
+    each.value.database_access ? { DB_HOST = local.database_name } : {},
+    each.value.environment,
+  )
+  infisical_project_id  = each.value.infisical_project_id
+  infisical_environment = each.value.infisical_environment
+  infisical_path        = each.value.infisical_path
+  infisical_token_path  = "${var.host_root}/secrets/apps/${each.key}-token"
+  secret_revision       = var.credentials_revision
+
+  labels = {
+    "traefik.enable"                                             = "true"
+    "traefik.docker.network"                                     = docker_network.proxy.name
+    "traefik.http.routers.${each.key}.rule"                      = "Host(`${each.value.domain}`)"
+    "traefik.http.routers.${each.key}.entrypoints"               = "websecure"
+    "traefik.http.routers.${each.key}.tls"                       = "true"
+    "traefik.http.routers.${each.key}.tls.certresolver"          = "letsencrypt"
+    "traefik.http.routers.${each.key}.service"                   = each.key
+    "traefik.http.services.${each.key}.loadbalancer.server.port" = tostring(each.value.port)
   }
 
-  # Mount docker.sock để Traefik có thể Auto-discovery các app khác
-  volumes {
-    host_path      = "/var/run/docker.sock"
-    container_path = "/var/run/docker.sock"
-    read_only      = true
-  }
-
-  command = [
-    "--api.insecure=true",
-    "--providers.docker=true",
-    "--entrypoints.web.address=:80",
-    "--entrypoints.websecure.address=:443"
-  ]
+  depends_on = [terraform_data.app_secrets, module.database, module.traefik]
 }

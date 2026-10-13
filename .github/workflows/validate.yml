@@ -1,0 +1,39 @@
+name: Terraform validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.13.5
+      - name: Check formatting
+        run: terraform fmt -check -recursive
+      - name: Validate shell syntax
+        run: |
+          set -euo pipefail
+          for script in scripts/*.sh operations/*.sh tests/*.sh; do
+            bash -n "$script"
+          done
+      - name: Test host operations without a Docker daemon
+        run: bash tests/operations.sh
+      - name: Test Infisical runner and preflight without SSH or cloud access
+        run: bash tests/runner.sh
+      - name: Validate database manifest
+        run: jq -e '.services | type == "array" and length > 0' config/database/services.yaml >/dev/null
+      - name: Validate and test the single root module
+        run: |
+          set -euo pipefail
+          terraform init -backend=false -input=false -lockfile=readonly
+          terraform validate
+          terraform test
