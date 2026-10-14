@@ -7,3 +7,5 @@ provider "docker" {
     "-o", "UserKnownHostsFile=${pathexpand(var.ssh_known_hosts_file)}",
   ]
 }
+
+provider "infisical" {}

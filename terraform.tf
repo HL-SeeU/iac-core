@@ -6,4 +6,11 @@ terraform {
       version = "~> 3.6.2"
     }
   }
+
+  required_providers {
+    infisical = {
+      source = "infisical/infisical"
+      version = "~> 0.12.0"
+    }
+  }
 }
