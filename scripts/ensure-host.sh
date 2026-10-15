@@ -17,10 +17,19 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
   (( 10#$TF_VAR_ssh_port >= 1 && 10#$TF_VAR_ssh_port <= 65535 ))
 [[ $TF_VAR_host_root =~ ^/[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*$ ]]
 
-ssh_options=(-o BatchMode=yes -o StrictHostKeyChecking=yes
-  -o "UserKnownHostsFile=$TF_VAR_ssh_known_hosts_file"
-  -o GlobalKnownHostsFile=/dev/null -o ConnectTimeout=30
+host_key_check=${TF_VAR_ssh_host_key_check:-true}
+[[ $host_key_check == true || $host_key_check == false ]] || {
+  printf 'Preflight: TF_VAR_ssh_host_key_check must be true or false.\n' >&2
+  exit 1
+}
+ssh_options=(-o BatchMode=yes -o GlobalKnownHostsFile=/dev/null -o ConnectTimeout=30
   -p "$TF_VAR_ssh_port")
+if [[ $host_key_check == true ]]; then
+  ssh_options+=(-o StrictHostKeyChecking=yes
+    -o "UserKnownHostsFile=$TF_VAR_ssh_known_hosts_file")
+else
+  ssh_options+=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
+fi
 destination="$TF_VAR_ssh_user@$TF_VAR_ssh_host"
 ssh "${ssh_options[@]}" "$destination" \
   "sudo -n bash -s -- '$TF_VAR_ssh_user'" < "$script_dir/install-docker.sh"

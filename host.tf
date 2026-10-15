@@ -15,8 +15,8 @@ resource "terraform_data" "host" {
     user     = var.ssh_user
     port     = var.ssh_port
     agent    = true
-    host_key = var.ssh_host_key
-    timeout  = "5m"
+    host_key = var.ssh_host_key_check ? var.ssh_host_key : ""
+    timeout  = "3m"
   }
 
   provisioner "remote-exec" {

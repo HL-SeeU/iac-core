@@ -132,11 +132,18 @@ variable "apps" {
   }
 }
 
+variable "ssh_host_key_check" {
+  type        = bool
+  default     = true
+  description = "Verify SSH server identity. Disable only temporarily for connection debugging."
+}
+
 variable "ssh_host_key" {
   type        = string
+  default     = ""
   description = "Verified SSH host public key. The runner derives this from SSH_KNOWN_HOSTS."
   validation {
-    condition     = can(regex("^(ssh-ed25519|ssh-rsa|ecdsa-sha2-[^ ]+) [A-Za-z0-9+/=]+$", var.ssh_host_key))
+    condition     = !var.ssh_host_key_check || can(regex("^(ssh-ed25519|ssh-rsa|ecdsa-sha2-[^ ]+) [A-Za-z0-9+/=]+$", var.ssh_host_key))
     error_message = "Provide a verified SSH public host key (algorithm and base64 key)."
   }
 }

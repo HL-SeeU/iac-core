@@ -19,17 +19,29 @@ cleanup_runner() {
 
 prepare_runner() {
   set +x
-  local name value repo agent_output line trusted_keys lookup
+  local name value repo agent_output line
   [[ -z ${_runner_dir:-} ]] || { runner_error "Already prepared."; return 1; }
+  export TF_VAR_ssh_host_key_check=${TF_VAR_ssh_host_key_check:-true}
+  [[ $TF_VAR_ssh_host_key_check == true || $TF_VAR_ssh_host_key_check == false ]] || {
+    runner_error "TF_VAR_ssh_host_key_check must be true or false."; return 1;
+  }
   for name in TF_CLOUD_ORGANIZATION TF_WORKSPACE TF_TOKEN_app_terraform_io \
     TF_VAR_ssh_host TF_VAR_ssh_user TF_VAR_ssh_port TF_VAR_acme_email \
-    TF_VAR_postgres_password VM_SSH_PRIVATE_KEY SSH_KNOWN_HOSTS; do
+    TF_VAR_postgres_password VM_SSH_PRIVATE_KEY; do
     value=${!name:-}
     [[ -n ${value//[[:space:]]/} ]] || {
       runner_error "Required configuration $name is missing."; return 1;
     }
     export "$name"
   done
+  if [[ $TF_VAR_ssh_host_key_check == true ]]; then
+    value=${SSH_KNOWN_HOSTS:-}
+    [[ -n ${value//[[:space:]]/} ]] || {
+      runner_error "Required configuration SSH_KNOWN_HOSTS is missing."; return 1;
+    }
+  else
+    printf 'Runner: WARNING: SSH host checking is DISABLED; server identity is not verified. Restore it after debugging.\n' >&2
+  fi
   for name in TF_CLOUD_ORGANIZATION TF_WORKSPACE; do
     value=${!name}
     [[ $value != *$'\n'* && $value != *$'\r'* ]] || {
@@ -78,31 +90,15 @@ prepare_runner() {
   }
   chmod 0700 "$_runner_dir" || { cleanup_runner; return 1; }
   export TF_VAR_ssh_known_hosts_file="$_runner_dir/known_hosts"
-  (umask 077; printf '%s\n' "$SSH_KNOWN_HOSTS" > "$TF_VAR_ssh_known_hosts_file") || {
+  (umask 077; printf '%s\n' "${SSH_KNOWN_HOSTS:-}" > "$TF_VAR_ssh_known_hosts_file") || {
     cleanup_runner; return 1;
   }
   chmod 0600 "$TF_VAR_ssh_known_hosts_file" || { cleanup_runner; return 1; }
-  lookup=$TF_VAR_ssh_host
-  [[ $TF_VAR_ssh_port == 22 ]] || lookup="[$TF_VAR_ssh_host]:$TF_VAR_ssh_port"
-  trusted_keys=$(ssh-keygen -F "$lookup" -f "$TF_VAR_ssh_known_hosts_file" 2>/dev/null |
-    awk '!/^#/ && $1 !~ /^@/ && NF >= 3 {print $2 " " $3}') || {
-    runner_error "Cannot resolve trusted SSH host key."; cleanup_runner; return 1;
-  }
-  [[ -n $trusted_keys ]] || {
-    runner_error "No trusted SSH key for configured host and port."; cleanup_runner; return 1;
-  }
-  if [[ -n ${TF_VAR_ssh_host_key:-} ]]; then
-    local matched=false
-    while IFS= read -r line; do
-      [[ $line != "$TF_VAR_ssh_host_key" ]] || matched=true
-    done <<< "$trusted_keys"
-    [[ $matched == true ]] || {
-      runner_error "SSH host key does not match trusted known_hosts."; cleanup_runner; return 1;
-    }
+  if [[ $TF_VAR_ssh_host_key_check == true ]]; then
+    prepare_runner_host_key || { cleanup_runner; return 1; }
   else
-    TF_VAR_ssh_host_key=${trusted_keys%%$'\n'*}
+    export TF_VAR_ssh_host_key=""
   fi
-  export TF_VAR_ssh_host_key
   agent_output=$(ssh-agent -a "$_runner_dir/agent.sock" -s 2>/dev/null) || {
     runner_error "Cannot start isolated SSH agent."; cleanup_runner; return 1;
   }
@@ -121,4 +117,29 @@ prepare_runner() {
     runner_error "Cannot load deployment SSH key."; cleanup_runner; return 1;
   fi
   unset VM_SSH_PRIVATE_KEY SSH_KNOWN_HOSTS
+}
+
+prepare_runner_host_key() {
+  local lookup trusted_keys line
+  lookup=$TF_VAR_ssh_host
+  [[ $TF_VAR_ssh_port == 22 ]] || lookup="[$TF_VAR_ssh_host]:$TF_VAR_ssh_port"
+  trusted_keys=$(ssh-keygen -F "$lookup" -f "$TF_VAR_ssh_known_hosts_file" 2>/dev/null |
+    awk '!/^#/ && $1 !~ /^@/ && NF >= 3 {print $2 " " $3}') || {
+    runner_error "Cannot resolve trusted SSH host key."; return 1;
+  }
+  [[ -n $trusted_keys ]] || {
+    runner_error "No trusted SSH key for configured host and port."; return 1;
+  }
+  if [[ -n ${TF_VAR_ssh_host_key:-} ]]; then
+    local matched=false
+    while IFS= read -r line; do
+      [[ $line != "$TF_VAR_ssh_host_key" ]] || matched=true
+    done <<< "$trusted_keys"
+    [[ $matched == true ]] || {
+      runner_error "SSH host key does not match trusted known_hosts."; return 1;
+    }
+  else
+    TF_VAR_ssh_host_key=${trusted_keys%%$'\n'*}
+  fi
+  export TF_VAR_ssh_host_key
 }

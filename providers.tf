@@ -3,8 +3,9 @@ provider "docker" {
   disable_docker_daemon_check = true
   ssh_opts = [
     "-o", "BatchMode=yes",
-    "-o", "StrictHostKeyChecking=yes",
-    "-o", "UserKnownHostsFile=${pathexpand(var.ssh_known_hosts_file)}",
+    "-o", "StrictHostKeyChecking=${var.ssh_host_key_check ? "yes" : "no"}",
+    "-o", "UserKnownHostsFile=${var.ssh_host_key_check ? pathexpand(var.ssh_known_hosts_file) : "/dev/null"}",
+    "-o", "GlobalKnownHostsFile=/dev/null",
   ]
 }
 

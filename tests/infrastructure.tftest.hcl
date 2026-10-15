@@ -52,6 +52,26 @@ run "runtime_routes" {
   }
 }
 
+run "host_key_required_by_default" {
+  command = plan
+  variables {
+    ssh_host_key = ""
+  }
+  expect_failures = [var.ssh_host_key]
+}
+
+run "diagnostic_mode_without_host_key" {
+  command = plan
+  variables {
+    ssh_host_key_check = false
+    ssh_host_key       = ""
+  }
+  assert {
+    condition     = var.ssh_host_key_check == false
+    error_message = "The explicit diagnostic bypass must be accepted without a pinned host key."
+  }
+}
+
 run "invalid_app_port" {
   command = plan
   variables {

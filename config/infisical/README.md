@@ -51,6 +51,7 @@ Optional infrastructure configuration:
 | `TF_VAR_name_prefix` | `iac-core` |
 | `TF_VAR_credentials_revision` | `1`; bump after rotating delivered credentials |
 | `TF_VAR_ssh_host_key` | Optional explicitly pinned key matching known_hosts |
+| `TF_VAR_ssh_host_key_check` | `true`; set `false` only temporarily for SSH diagnostics (disables server identity verification) |
 | `TF_VAR_acme_ca_server` | Let's Encrypt staging directory URL |
 | `TF_VAR_traefik_image` | `traefik:v3.6` |
 | `TF_VAR_postgres_image` | `postgres:17-bookworm` |

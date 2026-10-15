@@ -89,6 +89,21 @@ Existing Docker installations are not uninstalled/reinstalled/upgraded. An
 incompatible broken installation causes an explicit failure for an operator to
 repair. No public Docker TCP endpoint is enabled.
 
+## Temporary SSH diagnostics
+
+Host checking defaults to enabled. For a temporary diagnostic run, set
+`TF_VAR_ssh_host_key_check=false` in the runner environment. This bypasses host
+key matching in the runner, SSH preflight, all Terraform SSH provisioners, and
+the Docker provider. The deployment private key and SSH user are still required;
+`SSH_KNOWN_HOSTS` and the pinned host key are not required in this mode.
+The runner emits a warning because server identity is no longer verified and
+credentials could be sent to an impersonated server.
+
+The deployment workflow currently overrides this flag to `false` for debugging.
+Remove that step-level override after the test to restore verification. Do not
+leave this bypass enabled for production. An authentication failure with this
+flag disabled is separate from a host key mismatch.
+
 ## Secret updates and limits
 
 - Passwords/tokens are ephemeral inputs: supply them at apply time, and at both

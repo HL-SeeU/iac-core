@@ -47,7 +47,14 @@ cat > "$work/bin/ssh" <<'MOCK'
 #!/usr/bin/env bash
 set -eu
 trap 'printf "Mock SSH check failed at line %s\n" "$LINENO" >&2' ERR
-[[ $* == *StrictHostKeyChecking=yes* && $* == *BatchMode=yes* ]]
+[[ $* == *BatchMode=yes* ]]
+if [[ $TF_VAR_ssh_host_key_check == true ]]; then
+  [[ $* == *StrictHostKeyChecking=yes* ]]
+  [[ $* == *"UserKnownHostsFile=$TF_VAR_ssh_known_hosts_file"* ]]
+else
+  [[ $TF_VAR_ssh_host_key_check == false ]]
+  [[ $* == *StrictHostKeyChecking=no* && $* == *UserKnownHostsFile=/dev/null* ]]
+fi
 [[ $* == *GlobalKnownHostsFile=/dev/null* ]]
 [[ -n $SSH_AUTH_SOCK && -f $TF_VAR_ssh_known_hosts_file ]]
 case "$(uname -s)" in
@@ -74,7 +81,11 @@ cat > "$work/bin/terraform" <<'MOCK'
 set -eu
 [[ $PWD == "$TEST_REPO" ]]
 [[ -f $TF_VAR_ssh_known_hosts_file && -n $SSH_AUTH_SOCK ]]
-[[ $TF_VAR_ssh_host_key == "ssh-ed25519 TRUSTED_KEY" ]]
+if [[ $TF_VAR_ssh_host_key_check == true ]]; then
+  [[ $TF_VAR_ssh_host_key == "ssh-ed25519 TRUSTED_KEY" ]]
+else
+  [[ $TF_VAR_ssh_host_key_check == false && -z $TF_VAR_ssh_host_key ]]
+fi
 [[ $TF_VAR_postgres_password == SECRET_POSTGRES ]]
 [[ -z ${VM_SSH_PRIVATE_KEY:-} && -z ${SSH_KNOWN_HOSTS:-} ]]
 case "$1" in
@@ -102,6 +113,7 @@ defaults() {
   export SSH_KNOWN_HOSTS='example.test ssh-ed25519 TRUSTED_KEY'
   export TEST_TRUSTED_HOSTS=$SSH_KNOWN_HOSTS
   unset TF_VAR_apps TF_VAR_app_infisical_tokens TF_VAR_host_root TF_VAR_ssh_host_key
+  unset TF_VAR_ssh_host_key_check
   unset TEST_SSH_FAIL TEST_INIT_FAIL TEST_ADD_FAIL TEST_TF_FAIL
   : > "$work/order"
 }
@@ -146,6 +158,12 @@ echo "ok: sourcing has no side effects"
 
 defaults; unset TF_VAR_postgres_password
 expect_failure "missing configuration"
+[[ ! -s $work/order ]]
+defaults; export TF_VAR_ssh_host_key_check=invalid
+expect_failure "invalid host checking flag"
+[[ ! -s $work/order ]]
+defaults; unset SSH_KNOWN_HOSTS
+expect_failure "trusted hosts required by default"
 [[ ! -s $work/order ]]
 defaults; TF_CLOUD_ORGANIZATION=$'org\ninjected'
 expect_failure "multiline cloud configuration"
@@ -210,4 +228,27 @@ bash scripts/terraform.sh > "$work/output" 2>&1
 [[ $(cat "$work/order") == $'install\nprepare\ninfo\ninit\napply' ]]
 assert_cleanup
 echo "ok: default apply"
+defaults
+export TF_VAR_ssh_host_key_check=false TF_VAR_ssh_host_key='ssh-ed25519 WRONG_KEY'
+SSH_KNOWN_HOSTS='other.test ssh-ed25519 WRONG_KEY'
+TEST_TRUSTED_HOSTS=$SSH_KNOWN_HOSTS
+bash scripts/terraform.sh apply -auto-approve > "$work/output" 2>&1
+[[ $(cat "$work/order") == $'install\nprepare\ninfo\ninit\napply' ]]
+grep -q 'SSH host checking is DISABLED' "$work/output"
+assert_cleanup
+echo "ok: diagnostic bypass ignores mismatched host keys and warns"
+defaults
+export TF_VAR_ssh_host_key_check=false
+unset SSH_KNOWN_HOSTS
+TEST_TRUSTED_HOSTS=""
+bash scripts/terraform.sh plan > "$work/output" 2>&1
+[[ $(cat "$work/order") == $'install\nprepare\ninfo\ninit\nplan' ]]
+assert_cleanup
+echo "ok: diagnostic bypass does not require known_hosts"
+defaults; export TF_VAR_ssh_host_key_check=false TEST_ADD_FAIL=1
+expect_failure "diagnostic bypass still requires deployment key loading"
+[[ ! -s $work/order ]]
+defaults; export TF_VAR_ssh_host_key_check=false TEST_SSH_FAIL=1
+expect_failure "diagnostic bypass still fails on SSH errors"
+[[ $(cat "$work/order") == install ]]
 echo "Runner regression tests passed."

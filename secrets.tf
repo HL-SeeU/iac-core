@@ -7,7 +7,7 @@ resource "terraform_data" "postgres_secret" {
     user     = var.ssh_user
     port     = var.ssh_port
     agent    = true
-    host_key = var.ssh_host_key
+    host_key = var.ssh_host_key_check ? var.ssh_host_key : ""
     timeout  = "5m"
   }
 
@@ -40,7 +40,7 @@ resource "terraform_data" "app_secrets" {
     user     = var.ssh_user
     port     = var.ssh_port
     agent    = true
-    host_key = var.ssh_host_key
+    host_key = var.ssh_host_key_check ? var.ssh_host_key : ""
     timeout  = "5m"
   }
 
