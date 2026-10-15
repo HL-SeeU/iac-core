@@ -53,6 +53,6 @@ jobs:
       #   with:
       #     terraform_version: ${{ env.TERRAFORM_VERSION }}
 
-      # - name: Ensure Docker, initialize and apply one workspace
-      #   shell: bash
-      #   run: bash scripts/terraform.sh apply -auto-approve -lock-timeout=5m
+      - name: Ensure Docker, initialize and apply one workspace
+        shell: bash
+        run: bash scripts/terraform.sh apply -auto-approve -lock-timeout=5m
