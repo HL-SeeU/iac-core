@@ -89,6 +89,18 @@ Existing Docker installations are not uninstalled/reinstalled/upgraded. An
 incompatible broken installation causes an explicit failure for an operator to
 repair. No public Docker TCP endpoint is enabled.
 
+## Provider dependency lock file
+
+CI initializes with `-lockfile=readonly`. After adding a provider or changing
+provider constraints, update the committed `.terraform.lock.hcl` before deploying:
+
+```bash
+terraform providers lock -platform=linux_amd64 -platform=windows_amd64
+```
+
+Review and commit the generated lock file together with the provider requirements.
+Do not remove CI's read-only flag to work around a missing provider entry.
+
 ## Temporary SSH diagnostics
 
 Host checking defaults to enabled. For a temporary diagnostic run, set
