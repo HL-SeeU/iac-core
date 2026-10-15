@@ -37,6 +37,7 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           ssh-keyscan ${{ env.VM_PUBLIC_IP }} >> ~/.ssh/known_hosts
+          echo "TF_VAR_ssh_known_hosts_file=$HOME/.ssh/known_hosts" >> "$GITHUB_ENV"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
