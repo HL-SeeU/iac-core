@@ -15,8 +15,8 @@ resource "docker_container" "this" {
   name    = var.name
   image   = docker_image.this.image_id
   restart = "unless-stopped"
-  memory  = 256
-  cpus    = "0.5"
+  memory  = 1024
+  cpus    = "2.0"
 
   command = [
     "--api.dashboard=false",

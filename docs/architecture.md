@@ -13,6 +13,7 @@
 | Schema migrations | Service release pipeline |
 | Host password/token file delivery | Infisical-loaded ephemeral Terraform inputs |
 | State and locking | One Terraform Cloud workspace, Local execution mode |
+| Docker administration UI | Dockhand on loopback, accessed through an SSH tunnel |
 
 SSH connects the runner to the **Docker host**, not to each container. Child
 modules declare the same Docker provider source and inherit the root provider.
@@ -62,7 +63,7 @@ application readiness; database and Traefik healthchecks are always configured.
 ## Deliberately not included
 
 - VM creation, firewall changes, automatic OS/Docker upgrades.
-- Arbitrary Docker Compose conversion or a public dashboard.
+- Arbitrary Docker Compose conversion or a public administration dashboard.
 - Service image builds or automatic machine-identity token issuance.
 - Automatic migrations or a backup scheduler/retention policy.
 - Traefik file-provider configuration: labels are sufficient for this scaffold.

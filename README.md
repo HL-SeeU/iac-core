@@ -13,6 +13,7 @@ Infisical /infrastructure
        |- host preparation + ephemeral secret file provisioning
        |- proxy + internal database networks
        |- Traefik + persistent ACME volume
+       |- private Dockhand admin UI + persistent data volume
        |- PostgreSQL 17 + persistent data volume
        `- reusable app containers + Infisical runtime injection
 ```
@@ -61,6 +62,28 @@ Native `apply` does not perform `init` or load Infisical by itself. Use the wrap
 in CI or when the daemon is missing but existing Docker resources are in state:
 Terraform refresh happens before create-time provisioners.
 
+## Private Dockhand administration
+
+Terraform deploys Dockhand on the VM with its web port bound only to
+`127.0.0.1:3000`; it is not routed through Traefik or exposed on the public
+interface. Start an SSH tunnel from your workstation:
+
+```bash
+ssh -N -L 3000:127.0.0.1:3000 -p SSH_PORT SSH_USER@SSH_HOST
+```
+
+Then open `http://127.0.0.1:3000`. On first launch, enable authentication and
+create the administrator in Dockhand's **Settings > Authentication** before
+using the UI. Keep the tunnel open while using it.
+
+Dockhand mounts the Docker socket and runs as root so it can manage containers.
+This grants it effectively root-equivalent control of the VM; the read-only
+socket mount does not restrict Docker API operations. Keep access private and
+use a reviewed Dockhand image version for repeatable deployments. Dockhand's
+BSL 1.1 license has restrictions for commercial production use; review its
+[current license](https://github.com/Finsys/dockhand/blob/main/LICENSE.txt)
+before deploying in that context.
+
 ## Secrets and application setup
 
 Password/token inputs are Terraform 1.10 **ephemeral + sensitive** variables,
@@ -80,7 +103,7 @@ Both applies still use the same root/workspace. See [deployment](docs/deployment
 - [host.tf](host.tf), [secrets.tf](secrets.tf): SSH host/secret provisioning.
 - [main.tf](main.tf), [networks.tf](networks.tf), [providers.tf](providers.tf):
   Docker resources and module wiring.
-- [modules/](modules/): Traefik, PostgreSQL and reusable app container.
+- [modules/](modules/): Traefik, Dockhand, PostgreSQL and reusable app container.
 - [scripts/](scripts/): idempotent host setup and Infisical-loaded runner.
 - [operations/](operations/): DB/user provisioning, backup and restore.
 - [.github/workflows/](.github/workflows/): manual deployment and offline validation.

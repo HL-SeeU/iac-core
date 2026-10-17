@@ -182,6 +182,48 @@ run "traefik_tls" {
   }
 }
 
+run "dockhand_is_private_and_persistent" {
+  command = plan
+  module {
+    source = "./modules/dockhand"
+  }
+  variables {
+    name      = "test-dockhand"
+    image     = "fnsys/dockhand:latest"
+    memory_mb = 512
+    cpus      = 0.5
+  }
+  assert {
+    condition = (
+      length(docker_container.this.ports) == 1 &&
+      docker_container.this.ports[0].ip == "127.0.0.1" &&
+      docker_container.this.ports[0].internal == 3000 &&
+      docker_container.this.ports[0].external == 3000
+    )
+    error_message = "Dockhand must listen only on the host loopback interface."
+  }
+  assert {
+    condition = (
+      length(docker_container.this.mounts) == 1 &&
+      anytrue([
+        for mount in docker_container.this.mounts :
+        mount.source == "/var/run/docker.sock" && mount.read_only
+      ])
+    )
+    error_message = "Dockhand must receive read-only access to the Docker socket."
+  }
+  assert {
+    condition = (
+      length(docker_container.this.volumes) == 1 &&
+      anytrue([
+        for volume in docker_container.this.volumes :
+        volume.container_path == "/app/data"
+      ])
+    )
+    error_message = "Dockhand data must persist in a named Docker volume."
+  }
+}
+
 run "host_plan" {
   command = plan
   assert {
