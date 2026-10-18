@@ -63,14 +63,14 @@ run "cloudflare_main_domain_a_record" {
   command = plan
   variables {
     cloudflare_dns_enabled = true
-    cloudflare_main_domain = "local.io.vn"
+    cloudflare_main_domain = "seeu.pro.vn"
     cloudflare_zone_id     = "1234567890abcdef1234567890abcdef"
     ssh_host               = "203.0.113.10"
   }
   assert {
     condition = (
       cloudflare_dns_record.traefik_main_domain[0].type == "A" &&
-      cloudflare_dns_record.traefik_main_domain[0].name == "local.io.vn" &&
+      cloudflare_dns_record.traefik_main_domain[0].name == "seeu.pro.vn" &&
       cloudflare_dns_record.traefik_main_domain[0].content == "203.0.113.10" &&
       cloudflare_dns_record.traefik_main_domain[0].proxied
     )
@@ -80,9 +80,9 @@ run "cloudflare_main_domain_a_record" {
     condition = (
       length(cloudflare_dns_record.traefik_www) == 1 &&
       cloudflare_dns_record.traefik_www[0].zone_id == var.cloudflare_zone_id &&
-      cloudflare_dns_record.traefik_www[0].name == "www.local.io.vn" &&
+      cloudflare_dns_record.traefik_www[0].name == "www.seeu.pro.vn" &&
       cloudflare_dns_record.traefik_www[0].type == "CNAME" &&
-      cloudflare_dns_record.traefik_www[0].content == "local.io.vn" &&
+      cloudflare_dns_record.traefik_www[0].content == "seeu.pro.vn" &&
       cloudflare_dns_record.traefik_www[0].ttl == 1 &&
       cloudflare_dns_record.traefik_www[0].proxied
     )
@@ -94,16 +94,16 @@ run "dockhand_public_dns" {
   command = plan
   variables {
     cloudflare_dns_enabled = true
-    cloudflare_main_domain = "local.io.vn"
+    cloudflare_main_domain = "seeu.pro.vn"
     cloudflare_zone_id     = "1234567890abcdef1234567890abcdef"
     ssh_host               = "203.0.113.10"
   }
   assert {
     condition = (
       length(cloudflare_dns_record.dockhand) == 1 &&
-      cloudflare_dns_record.dockhand[0].name == "dochand.local.io.vn" &&
+      cloudflare_dns_record.dockhand[0].name == "dochand.seeu.pro.vn" &&
       cloudflare_dns_record.dockhand[0].type == "CNAME" &&
-      cloudflare_dns_record.dockhand[0].content == "local.io.vn" &&
+      cloudflare_dns_record.dockhand[0].content == "seeu.pro.vn" &&
       cloudflare_dns_record.dockhand[0].proxied &&
       cloudflare_dns_record.dockhand[0].ttl == 1 &&
       cloudflare_dns_record.dockhand[0].zone_id == var.cloudflare_zone_id
@@ -276,15 +276,15 @@ run "dashboard_dns" {
   command = plan
   variables {
     cloudflare_dns_enabled = true
-    cloudflare_main_domain = "local.io.vn"
+    cloudflare_main_domain = "seeu.pro.vn"
     cloudflare_zone_id     = "1234567890abcdef1234567890abcdef"
     ssh_host               = "203.0.113.10"
   }
   assert {
     condition = (
-      cloudflare_dns_record.traefik_dashboard[0].name == "proxy.local.io.vn" &&
+      cloudflare_dns_record.traefik_dashboard[0].name == "proxy.seeu.pro.vn" &&
       cloudflare_dns_record.traefik_dashboard[0].type == "CNAME" &&
-      cloudflare_dns_record.traefik_dashboard[0].content == "local.io.vn" &&
+      cloudflare_dns_record.traefik_dashboard[0].content == "seeu.pro.vn" &&
       cloudflare_dns_record.traefik_dashboard[0].proxied
     )
     error_message = "The proxy hostname must have a proxied CNAME pointing to the main domain."

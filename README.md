@@ -111,6 +111,36 @@ responses through Cloudflare, and monitor application latency and resource use.
 Local configuration checks:
 `terraform test -filter=tests/traefik-ratelimit.tftest.hcl`.
 
+## Webmin on the Docker host
+
+The existing host Webmin service is routed at `https://webmin.seeu.pro.vn`.
+[webmin.yml](config/traefik/dynamic/webmin.yml) is a static configuration,
+copied with the other dynamic YAML files using the same directory sync as MySQL.
+With Cloudflare DNS enabled, Terraform discovers the hostname from its `Host`
+rule and creates a proxied CNAME; `dynamic_service_urls` lists discovered URLs.
+If changing the main domain, update the hostname in `webmin.yml` too.
+
+Traefik maps `host.docker.internal` to Docker's `host-gateway` and forwards to
+`https://host.docker.internal:10000`. Docker Engine 20.10+ is required. This
+does not add a network, enable host networking, or publish port 10000.
+The first deployment recreates Traefik and briefly interrupts proxy traffic.
+
+Webmin must already listen on an address reachable from the container, not
+only `127.0.0.1`. Restrict port 10000 to the necessary Docker sources with
+host/cloud firewalls; do not expose it publicly. Host Webmin installation,
+listen addresses and referer settings are not managed by Terraform.
+If required by Webmin, add `webmin.<cloudflare_main_domain>` to its existing
+`referers` setting and restart Webmin.
+
+The Webmin-only servers transport skips backend certificate verification to
+support its self-signed HTTPS certificate; other services are unaffected.
+Use a trusted backend certificate/CA instead where possible. Protect this
+administration endpoint with external access controls and Webmin login/2FA.
+Verify the login page and redirects after applying, and use a production ACME
+certificate with Cloudflare Full (strict).
+
+Local checks: `terraform test -filter=tests/webmin.tftest.hcl`.
+
 ## External MySQL TCP proxy
 
 The root configures Traefik to forward `<ssh_host>:3306` to the existing OCI
@@ -135,6 +165,19 @@ configuration; its additional listeners and file provider are disabled by defaul
   SSH into `<host_root>/traefik/dynamic` before Traefik starts. That directory is
   reserved for these managed YAML files: removed repository files are removed
   from the VM on the next apply. Keep secrets out of this configuration.
+
+With Cloudflare DNS enabled, exact backtick HTTP matchers such as
+``Host(`app.seeu.pro.vn`)`` automatically create proxied CNAME records pointing
+to `cloudflare_main_domain`. Declare each hostname only in YAML; no separate
+DNS resource is needed. Multiple `Host` matchers are supported, names are
+lowercased and duplicates are removed. Hostnames must be valid subdomains of
+`cloudflare_main_domain`; other domains fail the plan. `HostRegexp`, TCP
+`HostSNI`, and rules without an exact backtick `Host` matcher do not create DNS.
+The main domain, `www`, Dockhand and the dashboard retain their separate DNS
+resources and are excluded from automatic creation. This discovery only covers
+dynamic YAML files, not Docker labels or `var.apps`. Removing a hostname from
+all dynamic routers removes its automatic DNS record on the next apply.
+Import any pre-existing manually managed record before applying.
 
 The module mounts the entire directory read-only and enables file-provider
 watching. Backend/router changes are synchronized using atomic per-file renames

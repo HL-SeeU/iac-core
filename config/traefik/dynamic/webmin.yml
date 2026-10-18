@@ -1,0 +1,20 @@
+http:
+  routers:
+    webmin:
+      rule: "Host(`webmin.seeu.pro.vn`)"
+      entryPoints:
+        - websecure
+      service: webmin
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    webmin:
+      loadBalancer:
+        servers:
+          - url: "https://host.docker.internal:10000"
+        serversTransport: webmin-tls
+
+  serversTransports:
+    webmin-tls:
+      insecureSkipVerify: true

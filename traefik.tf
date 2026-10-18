@@ -35,6 +35,15 @@ locals {
       fileset("${path.module}/config/traefik/dynamic", "*.yaml"),
     ) : name => file("${path.module}/config/traefik/dynamic/${name}")
   }
+  traefik_host_rule_pattern = "Host\\(\\s*`([^`]+)`\\s*\\)"
+  traefik_dynamic_hostnames = toset(flatten([
+    for content in values(local.traefik_dynamic_files) : [
+      for router in lookup(lookup(yamldecode(content), "http", {}), "routers", {}) : [
+        for match in regexall(local.traefik_host_rule_pattern, lookup(router, "rule", "")) :
+        lower(match[0])
+      ]
+    ]
+  ]))
 }
 
 resource "terraform_data" "traefik_files" {

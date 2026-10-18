@@ -8,6 +8,11 @@ output "mysql_endpoint" {
   description = "Public TCP endpoint proxied by Traefik to the external MySQL database."
 }
 
+output "dynamic_service_urls" {
+  value       = { for hostname in local.traefik_dynamic_hostnames : hostname => "https://${hostname}" }
+  description = "HTTPS hostnames discovered from Traefik dynamic HTTP router rules."
+}
+
 output "database_container" {
   value       = module.database.name
   description = "Container name for host-side database operations."

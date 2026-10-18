@@ -18,6 +18,11 @@ resource "docker_container" "this" {
   memory  = 1024
   cpus    = "2.0"
 
+  host {
+    host = "host.docker.internal"
+    ip   = "host-gateway"
+  }
+
   command = concat([
     "--api.dashboard=true",
     "--api.insecure=false",

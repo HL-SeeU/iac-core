@@ -67,8 +67,13 @@ IPv4 in `TF_VAR_ssh_host` and is proxied by Cloudflare. A proxied CNAME maps
 `www.<main-domain>` to the main domain. Another proxied CNAME maps
 `dochand.<main-domain>` to the main domain. Dockhand's Traefik HTTPS route is
 always enabled, independently of DNS management. Provide the main domain even
-if managing DNS manually. No other app subdomain records are created; manage those
-separately. Leave DNS disabled until
+if managing DNS manually. Exact backtick `Host` matchers in
+`config/traefik/dynamic/*.yml` and `*.yaml` automatically create proxied CNAMEs
+to the main domain, including Webmin. These hostnames must be subdomains of
+`TF_VAR_cloudflare_main_domain`. The main domain, `www`, Dockhand and dashboard
+are excluded because their records are already managed separately.
+Docker-label app domains are not discovered; manage those separately.
+Leave DNS disabled until
 the domain, zone ID and token are configured.
 
 The Traefik image defaults to `traefik:v3.6` in
