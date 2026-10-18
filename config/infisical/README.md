@@ -84,6 +84,41 @@ When upgrading from Basic Auth, remove `TF_VAR_traefik_dashboard_users` from
 Infisical. After applying, the old `<host_root>/secrets/traefik-dashboard-users`
 file is unused and can be removed manually from the VM.
 
+## Optional Grafana Cloud
+
+Leave `TF_VAR_grafana_cloud` unset to keep observability disabled. To enable
+metrics, filtered/sampled access logs and 10% tracing, add these keys in the
+same `prod` environment and `/infrastructure` path:
+
+| Key | Value / purpose |
+| --- | --- |
+| `TF_VAR_grafana_cloud` | JSON connection object below; non-secret URLs and tenant IDs |
+| `TF_VAR_grafana_cloud_token` | Stack-scoped Cloud access-policy token with `metrics:write`, `logs:write`, `traces:write` |
+| `TF_VAR_credentials_revision` | Bump after token rotation to redeliver the file and recreate Alloy |
+
+Copy the actual URLs and numeric usernames from your stack's connection
+instructions; the IDs can differ by product. The OTLP URL is the HTTP **base**
+URL ending in `/otlp`, not a gRPC endpoint or a URL with `/v1/traces` appended.
+The exporter appends `/v1/traces` itself.
+
+```json
+{
+  "metrics_url": "https://prometheus-prod-REGION.grafana.net/api/prom/push",
+  "metrics_username": "123456",
+  "logs_url": "https://logs-prod-REGION.grafana.net/loki/api/v1/push",
+  "logs_username": "234567",
+  "otlp_url": "https://otlp-gateway-prod-REGION.grafana.net/otlp",
+  "otlp_username": "345678"
+}
+```
+
+The token is ephemeral and sensitive in Terraform, installed root-owned
+`0600` at `<host_root>/observability/cloud-token`, and read from a file by
+Alloy. It is not included in state, saved plans, rendered configuration or
+Docker environment variables. Both URLs and usernames are ordinary state
+data; do not put credentials in them. See the
+[quota and collection policy](../../README.md#free-quota-versus-collection-controls).
+
 Example `TF_VAR_apps` value (JSON, not HCL):
 
 ```json

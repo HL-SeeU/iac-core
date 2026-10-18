@@ -1,11 +1,13 @@
 module "traefik" {
   source = "./modules/traefik"
 
-  name           = "${var.name_prefix}-traefik"
-  network        = docker_network.proxy.name
-  acme_email     = var.acme_email
-  acme_ca_server = var.acme_ca_server
-  main_domain    = var.cloudflare_main_domain
+  name                  = "${var.name_prefix}-traefik"
+  network               = docker_network.proxy.name
+  acme_email            = var.acme_email
+  acme_ca_server        = var.acme_ca_server
+  main_domain           = var.cloudflare_main_domain
+  observability_enabled = module.observability.enabled
+  tracing_endpoint      = module.observability.tracing_endpoint
 
   depends_on = [terraform_data.host]
 }

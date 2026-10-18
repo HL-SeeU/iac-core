@@ -37,3 +37,5 @@ jobs:
           terraform init -backend=false -input=false -lockfile=readonly
           terraform validate
           terraform test
+      - name: Test observability against local fake Cloud endpoints
+        run: python3 tests/observability.py

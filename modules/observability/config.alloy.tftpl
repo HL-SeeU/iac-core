@@ -1,0 +1,174 @@
+logging {
+  level  = "warn"
+  format = "json"
+}
+
+local.file "cloud_token" {
+  filename  = "/etc/alloy/cloud-token"
+  is_secret = true
+}
+
+prometheus.scrape "traefik" {
+  targets = [{
+    __address__ = "${traefik_name}:8082",
+    job         = "traefik",
+    instance    = "${instance}",
+  }]
+  scrape_interval = "60s"
+  sample_limit    = 7500
+  body_size_limit = "4MB"
+  forward_to      = [prometheus.relabel.traefik.receiver]
+}
+
+prometheus.relabel "traefik" {
+  forward_to = [prometheus.remote_write.cloud.receiver]
+  rule {
+    source_labels = ["__name__"]
+    regex         = "traefik_(entrypoint|service|config|tls)_.*|up"
+    action        = "keep"
+  }
+}
+
+prometheus.scrape "alloy" {
+  targets = [{
+    __address__ = "127.0.0.1:12345",
+    job         = "alloy",
+    instance    = "${instance}",
+  }]
+  scrape_interval = "60s"
+  sample_limit    = 1500
+  forward_to      = [prometheus.relabel.alloy.receiver]
+}
+
+prometheus.relabel "alloy" {
+  forward_to = [prometheus.remote_write.cloud.receiver]
+  rule {
+    source_labels = ["__name__"]
+    regex         = "loki_process_dropped_lines_total|loki_write_(sent|dropped)_.*|prometheus_remote_storage_.*|otelcol_(exporter|processor)_.*|up"
+    action        = "keep"
+  }
+}
+
+prometheus.remote_write "cloud" {
+  endpoint {
+    url = ${jsonencode(cloud.metrics_url)}
+    basic_auth {
+      username = ${jsonencode(cloud.metrics_username)}
+      password_file = "/etc/alloy/cloud-token"
+    }
+    queue_config {
+      max_shards = 2
+      capacity   = 2500
+    }
+  }
+  wal {
+    max_keepalive_time = "1h"
+  }
+}
+
+discovery.docker "traefik" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "15s"
+  filter {
+    name   = "name"
+    values = ["^/${traefik_name}$"]
+  }
+}
+
+loki.source.docker "traefik" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.docker.traefik.targets
+  labels     = { job = "traefik", instance = "${instance}" }
+  forward_to = [loki.process.traefik.receiver]
+}
+
+loki.process "traefik" {
+  forward_to = [loki.write.cloud.receiver]
+
+  stage.drop {
+    longer_than         = "4KB"
+    drop_counter_reason = "oversize"
+  }
+  stage.json {
+    expressions = {
+      status   = "DownstreamStatus",
+      priority = "DownstreamStatus >= `400` || Duration >= `1000000000`",
+    }
+  }
+  stage.drop {
+    source              = "status"
+    expression          = "^$"
+    drop_counter_reason = "not_access_log"
+  }
+  stage.labels {
+    values = { priority = "" }
+  }
+  stage.match {
+    selector = "{priority=\"false\"}"
+    stage.sampling {
+      rate                = 0.1
+      drop_counter_reason = "normal_request_sampling"
+    }
+  }
+  stage.limit {
+    rate  = 2
+    burst = 10
+    drop  = true
+  }
+  stage.label_keep {
+    values = ["job", "instance"]
+  }
+}
+
+loki.write "cloud" {
+  endpoint {
+    url = ${jsonencode(cloud.logs_url)}
+    basic_auth {
+      username = ${jsonencode(cloud.logs_username)}
+      password_file = "/etc/alloy/cloud-token"
+    }
+  }
+}
+
+otelcol.receiver.otlp "traefik" {
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+  output {
+    traces = [otelcol.processor.memory_limiter.traces.input]
+  }
+}
+
+otelcol.processor.memory_limiter "traces" {
+  check_interval = "1s"
+  limit          = "200MiB"
+  spike_limit    = "50MiB"
+  output {
+    traces = [otelcol.processor.batch.traces.input]
+  }
+}
+
+otelcol.processor.batch "traces" {
+  timeout             = "5s"
+  send_batch_size     = 256
+  send_batch_max_size = 512
+  output {
+    traces = [otelcol.exporter.otlphttp.cloud.input]
+  }
+}
+
+otelcol.auth.basic "cloud" {
+  // Alloy v1.20.1 fails to build client_auth-only configuration at startup.
+  username = ${jsonencode(cloud.otlp_username)}
+  password = local.file.cloud_token.content
+}
+
+otelcol.exporter.otlphttp "cloud" {
+  client {
+    endpoint = ${jsonencode(cloud.otlp_url)}
+    auth     = otelcol.auth.basic.cloud.handler
+  }
+  sending_queue {
+    queue_size = 256
+  }
+}

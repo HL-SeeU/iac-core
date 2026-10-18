@@ -125,6 +125,95 @@ BSL 1.1 license has restrictions for commercial production use; review its
 [current license](https://github.com/Finsys/dockhand/blob/main/LICENSE.txt)
 before deploying in that context.
 
+## Grafana Cloud observability (optional)
+
+Traefik metrics, access logs and traces can be sent through a private Grafana
+Alloy container to **Grafana Cloud Free**. No Grafana, Prometheus, Loki or Tempo
+server is hosted on the VM. Existing deployments remain unchanged until
+`TF_VAR_grafana_cloud` is configured in Infisical; see the
+[connection keys](config/infisical/README.md#optional-grafana-cloud).
+
+The [observability module](modules/observability/) owns Alloy provisioning,
+configuration, storage and credential delivery. The root only passes Infisical
+inputs and wires its internal tracing endpoint to Traefik. Cloud validation
+lives in the module; root variables remain necessary for `TF_VAR_*` inputs.
+State `moved` blocks preserve the former root resource addresses without
+requiring a manual `terraform state mv` during this extraction. Container and
+volume names, the rendered configuration and credential paths are unchanged.
+
+Create a Grafana Cloud stack on the Free plan and copy its Prometheus
+remote-write URL/user, Loki push URL/user and OpenTelemetry HTTP base URL/user
+from the Cloud connection pages. Create a stack-scoped access-policy token
+with only `metrics:write`, `logs:write` and `traces:write`. Store it in
+Infisical, not in tfvars, Docker environment variables or Git. Run the normal
+deployment after adding the connection keys. Bump `TF_VAR_credentials_revision`
+when rotating the token; this redelivers the root-only file and recreates Alloy.
+
+### Free quota versus collection controls
+
+Use the allowances shown in your own Cloud account as authoritative:
+
+| Allowance | Meaning | Repository collection policy |
+| --- | --- | --- |
+| 10k active metric series | Distinct metric name + label combinations active in Cloud, not log lines or samples | One Traefik target, router labels disabled, metric allowlists, 60-second scrape interval |
+| 14-day retention | Cloud controls how long data remains queryable; this does not reset monthly usage every 14 days | No local retention setting can increase the Free retention |
+| 50 GB processed/written/retained, where listed | Separate product-specific usage dimensions, not a combined 150 GB pool | Reduce data before export; verify the product and billing period for each allowance in Cloud |
+
+The metrics scrape safety limits are 7,500 raw samples for Traefik and 1,500
+for Alloy per scrape. Exceeding a limit **fails that scrape**, rather than
+keeping the first N series. These limits do not guarantee fewer than 10k
+Cloud-active series: label churn, scrape-generated metrics, and other senders
+also count. Slower scraping reduces samples, not the number of active series.
+
+Access logs keep status, duration, method, router/service names, timestamp and
+trace/span IDs only; paths, query strings, client IPs and headers are omitted.
+Alloy keeps errors (HTTP >= 400) and slow requests (>= 1 second), samples 10%
+of other requests, then applies a **shared 2 lines/second, burst 10** limit.
+Lines over 4 KB are dropped. Errors and slow requests can also be dropped
+during overload. At a sustained 2 x 4 KB/second this is roughly 22 GB of raw
+lines per 31 days, excluding metadata, retries, restart bursts and other
+senders. This is a conservative estimate, **not a Cloud monthly hard cap**.
+Traefik still writes all allowlisted access logs locally; Docker rotation is
+10 MB x 3 files. General Traefik operational logs remain in Docker, not Loki.
+
+Tracing samples 10% of root traces at Traefik; incoming parent sampling
+decisions are respected. This is not a byte limit, and externally sampled
+parents can increase the volume. Application internals require application
+OpenTelemetry instrumentation. Alloy uses bounded trace queues and a memory
+limiter; these protect the VM, not the Cloud quota.
+
+Stay on the **Free** plan if you do not want paid overage billing; do not treat
+these source controls as a billing cap on a paid plan. In Grafana, check
+**Billing/Usage** and the `grafanacloud-usage` data source, and configure
+usage alerts at 70/85/95% of the applicable allowances. Alerts notify; they do
+not stop export. Check `up{job="traefik"}` and `up{job="alloy"}` for scrape
+failures and Alloy's forwarded drop/exporter metrics for data loss.
+
+Verify after deployment:
+
+- Import the [Traefik dashboard 17346](https://grafana.com/grafana/dashboards/17346/);
+  router-level panels may be empty because router metrics are disabled.
+- In Explore, query metrics `traefik_service_requests_total` and Loki
+  `{job="traefik"}`. Low traffic and sampling can mean no normal-request logs.
+- In Tempo, search for service `<name_prefix>-traefik`; make enough requests
+  to produce sampled traces. Trace IDs in sampled access logs can be used to
+  look up traces.
+- Inspect Alloy readiness and errors with `docker inspect` / `docker logs`.
+  Readiness confirms the local configuration, not successful Cloud delivery;
+  check for authentication, rate-limit and export errors too.
+
+Alloy has no host-published ports or Traefik route. Its administration server
+binds to container loopback; OTLP port 4318 and Traefik metrics port 8082 are
+only reachable on the Docker proxy network. Root-only Cloud credentials are
+directory-mounted read-only. Alloy reads Traefik logs through the Docker
+socket: even a read-only mount grants root-equivalent Docker API access.
+Only trusted workloads should share this network. The persistent Alloy
+volume holds log positions and the metrics WAL, not 14 days of telemetry;
+long Cloud outages can lose data, and the volume still needs disk monitoring.
+Removing `TF_VAR_grafana_cloud` stops collection on the next apply; it does not
+erase existing Cloud data or the root-only host credential file. Revoke the
+Cloud token and remove the unused credential file when retiring the integration.
+
 ## Secrets and application setup
 
 Password/token inputs are Terraform 1.10 **ephemeral + sensitive** variables,
@@ -144,7 +233,7 @@ Both applies still use the same root/workspace. See [deployment](docs/deployment
 - [host.tf](host.tf), [secrets.tf](secrets.tf): SSH host/secret provisioning.
 - [main.tf](main.tf), [networks.tf](networks.tf), [providers.tf](providers.tf):
   Docker resources and module wiring.
-- [modules/](modules/): Traefik, Dockhand, PostgreSQL and reusable app container.
+- [modules/](modules/): Traefik, Dockhand, PostgreSQL, observability and reusable app container.
 - [scripts/](scripts/): idempotent host setup and Infisical-loaded runner.
 - [operations/](operations/): DB/user provisioning, backup and restore.
 - [.github/workflows/](.github/workflows/): manual deployment and offline validation.
@@ -167,6 +256,12 @@ Tests mock Docker/SSH/runner commands and never deploy to a real VM. One
 plan-only test uses the actual Docker provider with an unreachable endpoint to
 check that first-deployment planning does not require an installed daemon.
 Run a normal `init` before a real deployment after backend-free checks.
+
+With Python 3 and a local Docker daemon, also run `python tests/observability.py`.
+It validates the rendered Alloy configuration and tests metrics filtering,
+log sampling/rate limits and trace export against fake endpoints on an isolated
+Docker network. It pulls the pinned Alloy and Python test images if absent,
+never contacts Grafana Cloud, and removes its own containers/network afterward.
 
 ## Operational notes
 

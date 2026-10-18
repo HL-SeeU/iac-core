@@ -18,7 +18,7 @@ resource "docker_container" "this" {
   memory  = 1024
   cpus    = "2.0"
 
-  command = [
+  command = concat([
     "--api.dashboard=true",
     "--api.insecure=false",
     "--providers.docker=true",
@@ -33,7 +33,31 @@ resource "docker_container" "this" {
     "--certificatesresolvers.letsencrypt.acme.caserver=${var.acme_ca_server}",
     "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web",
     "--ping=true",
-  ]
+    ], var.observability_enabled ? [
+    "--accesslog=true",
+    "--accesslog.format=json",
+    "--accesslog.fields.defaultmode=drop",
+    "--accesslog.fields.headers.defaultmode=drop",
+    "--accesslog.fields.names.StartUTC=keep",
+    "--accesslog.fields.names.DownstreamStatus=keep",
+    "--accesslog.fields.names.Duration=keep",
+    "--accesslog.fields.names.RequestMethod=keep",
+    "--accesslog.fields.names.RouterName=keep",
+    "--accesslog.fields.names.ServiceName=keep",
+    "--accesslog.fields.names.TraceId=keep",
+    "--accesslog.fields.names.SpanId=keep",
+    "--entrypoints.metrics.address=:8082",
+    "--metrics.prometheus=true",
+    "--metrics.prometheus.entrypoint=metrics",
+    "--metrics.prometheus.addrouterslabels=false",
+    "--metrics.prometheus.addentrypointslabels=true",
+    "--metrics.prometheus.addserviceslabels=true",
+    "--tracing=true",
+    "--tracing.servicename=${var.name}",
+    "--tracing.samplerate=0.1",
+    "--tracing.otlp.http=true",
+    "--tracing.otlp.http.endpoint=${var.tracing_endpoint}",
+  ] : [])
 
   ports {
     internal = 80

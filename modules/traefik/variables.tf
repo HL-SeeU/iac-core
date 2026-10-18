@@ -12,6 +12,20 @@ variable "network" {
   type = string
 }
 
+variable "observability_enabled" {
+  type    = bool
+  default = false
+}
+
+variable "tracing_endpoint" {
+  type    = string
+  default = ""
+  validation {
+    condition     = !var.observability_enabled || can(regex("^http://[a-z0-9-]+:4318/v1/traces$", var.tracing_endpoint))
+    error_message = "Observability requires an internal Alloy OTLP HTTP endpoint on port 4318."
+  }
+}
+
 variable "acme_email" {
   type = string
 }
