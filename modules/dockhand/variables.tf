@@ -30,7 +30,7 @@ variable "cpus" {
 
 variable "sub_domain" {
   type        = string
-  default     = "dochand"
+  default     = "docker"
   description = "Subdomain for the Dockhand service."
   validation {
     condition     = can(regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", var.sub_domain))

@@ -52,5 +52,5 @@ resource "cloudflare_dns_record" "traefik_dashboard" {
   content = cloudflare_dns_record.traefik_main_domain[0].name
   ttl     = 1
   proxied = true
-  comment = "Terraform-managed authenticated Traefik dashboard"
+  comment = "Terraform-managed Traefik dashboard"
 }

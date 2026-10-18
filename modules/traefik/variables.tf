@@ -27,13 +27,3 @@ variable "main_domain" {
     error_message = "A valid main_domain is required for the proxy dashboard hostname."
   }
 }
-
-variable "dashboard_users_file" {
-  type        = string
-  description = "Host path of the SSH-provisioned bcrypt htpasswd file."
-}
-
-variable "credentials_revision" {
-  type        = string
-  description = "Secret resource revision used to remount the users file after rotation."
-}

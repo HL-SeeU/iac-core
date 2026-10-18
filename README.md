@@ -66,21 +66,20 @@ Terraform refresh happens before create-time provisioners.
 
 The dashboard is routed over HTTPS at
 `https://proxy.<cloudflare_main_domain>/dashboard/` (including the trailing `/`).
-Both the dashboard and API are protected by Basic Auth using an SSH-provisioned
-htpasswd file, not credentials embedded in Docker labels. The insecure API
-mode is disabled; port 8080 is not published.
+Both the dashboard and API are publicly accessible without authentication.
+HTTPS encrypts traffic but does not restrict access. Use external access
+controls if these endpoints must be private. The insecure API listener remains
+disabled; port 8080 is not published.
 
-Before applying, add `TF_VAR_traefik_dashboard_users` to the Infisical path
-loaded by your runner. Generate its value with `htpasswd -nB admin` on a
-trusted machine with htpasswd installed and save the complete `username:hash`
-line without escaping `$`. Do not commit the value. See the
-[Infisical guide](config/infisical/README.md) for credential rotation.
+No dashboard credentials are required. Remove the former
+`TF_VAR_traefik_dashboard_users` secret from Infisical if upgrading from the
+Basic Auth configuration. After applying, the former users file at
+`<host_root>/secrets/traefik-dashboard-users` is no longer mounted or managed;
+it can be removed manually from the VM.
 
 With Cloudflare DNS enabled, Terraform creates the proxied `proxy` CNAME;
 otherwise create the DNS record manually. Use a production Let's Encrypt
 certificate and Cloudflare Full (strict) as described below for Dockhand.
-Basic Auth is not SSO or MFA; prefer additional network restrictions for an
-administrative dashboard.
 
 ## Dockhand administration
 

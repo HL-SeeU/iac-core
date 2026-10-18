@@ -1,34 +1,3 @@
-resource "terraform_data" "traefik_dashboard_secret" {
-  triggers_replace = [terraform_data.host.id, var.credentials_revision]
-
-  connection {
-    type     = "ssh"
-    host     = var.ssh_host
-    user     = var.ssh_user
-    port     = var.ssh_port
-    agent    = true
-    host_key = var.ssh_host_key_check ? var.ssh_host_key : ""
-    timeout  = "5m"
-  }
-
-  provisioner "remote-exec" {
-    inline = ["mkdir -m 700 /tmp/iac-secret-${self.id}"]
-  }
-
-  provisioner "file" {
-    content     = var.traefik_dashboard_users
-    destination = "/tmp/iac-secret-${self.id}/users"
-  }
-
-  provisioner "remote-exec" {
-    inline = [
-      "set -eu",
-      "trap 'rm -rf /tmp/iac-secret-${self.id}' EXIT",
-      "sudo -n install -o root -g root -m 0600 /tmp/iac-secret-${self.id}/users '${var.host_root}/secrets/traefik-dashboard-users'",
-    ]
-  }
-}
-
 resource "terraform_data" "postgres_secret" {
   triggers_replace = [terraform_data.host.id, var.credentials_revision]
 

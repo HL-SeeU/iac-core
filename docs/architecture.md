@@ -14,6 +14,7 @@
 | Host password/token file delivery | Infisical-loaded ephemeral Terraform inputs |
 | State and locking | One Terraform Cloud workspace, Local execution mode |
 | Docker administration UI | Dockhand with an always-enabled Traefik HTTPS route and loopback maintenance port |
+| Traefik dashboard and API | Public HTTPS route without authentication; no published port 8080 |
 
 SSH connects the runner to the **Docker host**, not to each container. Child
 modules declare the same Docker provider source and inherit the root provider.
@@ -23,6 +24,11 @@ still needs a working daemon before provisioners run. The runner preflight
 ensures Docker exists/runs before init/apply, avoiding that refresh-order trap.
 
 ## Network boundaries
+
+Traefik exposes its dashboard and API at `proxy.<main-domain>` over HTTPS
+without authentication. TLS is not access control; use external restrictions
+when private administrative access is required. The insecure API listener
+remains disabled.
 
 Traefik and Dockhand always join the proxy network. Traefik always routes the
 Dockhand `dochand` hostname over HTTPS. Authentication must be configured
@@ -68,7 +74,7 @@ application readiness; database and Traefik healthchecks are always configured.
 ## Deliberately not included
 
 - VM creation, firewall changes, automatic OS/Docker upgrades.
-- Arbitrary Docker Compose conversion or an unauthenticated Traefik dashboard.
+- Arbitrary Docker Compose conversion or dashboard authentication/access controls.
 - Service image builds or automatic machine-identity token issuance.
 - Automatic migrations or a backup scheduler/retention policy.
 - Traefik file-provider configuration: labels are sufficient for this scaffold.
