@@ -2,11 +2,13 @@ mock_provider "docker" {}
 mock_provider "cloudflare" {}
 
 variables {
-  ssh_host          = "vm.example.com"
-  ssh_user          = "deploy"
-  acme_email        = "ops@example.com"
-  ssh_host_key      = "ssh-ed25519 dGVzdA=="
-  postgres_password = "ephemeral-test-password"
+  cloudflare_dns_enabled = false
+  cloudflare_main_domain = "local.io.vn"
+  ssh_host               = "vm.example.com"
+  ssh_user               = "deploy"
+  acme_email             = "ops@example.com"
+  ssh_host_key           = "ssh-ed25519 dGVzdA=="
+  postgres_password      = "ephemeral-test-password"
   app_infisical_tokens = {
     service-a = "ephemeral-service-a-token"
     service-b = "ephemeral-service-b-token"
@@ -52,7 +54,7 @@ run "runtime_routes" {
     error_message = "Resource names must follow the configured prefix."
   }
   assert {
-    condition     = length(cloudflare_dns_record.traefik_main_domain) == 0
+    condition     = length(cloudflare_dns_record.traefik_main_domain) == 0 && length(cloudflare_dns_record.traefik_www) == 0 && length(cloudflare_dns_record.dockhand) == 0
     error_message = "Cloudflare DNS must remain disabled unless explicitly enabled."
   }
 }
@@ -73,6 +75,40 @@ run "cloudflare_main_domain_a_record" {
       cloudflare_dns_record.traefik_main_domain[0].proxied
     )
     error_message = "The main domain must resolve through a proxied A record to the VM IPv4."
+  }
+  assert {
+    condition = (
+      length(cloudflare_dns_record.traefik_www) == 1 &&
+      cloudflare_dns_record.traefik_www[0].zone_id == var.cloudflare_zone_id &&
+      cloudflare_dns_record.traefik_www[0].name == "www.local.io.vn" &&
+      cloudflare_dns_record.traefik_www[0].type == "CNAME" &&
+      cloudflare_dns_record.traefik_www[0].content == "local.io.vn" &&
+      cloudflare_dns_record.traefik_www[0].ttl == 1 &&
+      cloudflare_dns_record.traefik_www[0].proxied
+    )
+    error_message = "www must be a proxied CNAME pointing to the main domain in the same zone."
+  }
+}
+
+run "dockhand_public_dns" {
+  command = plan
+  variables {
+    cloudflare_dns_enabled = true
+    cloudflare_main_domain = "local.io.vn"
+    cloudflare_zone_id     = "1234567890abcdef1234567890abcdef"
+    ssh_host               = "203.0.113.10"
+  }
+  assert {
+    condition = (
+      length(cloudflare_dns_record.dockhand) == 1 &&
+      cloudflare_dns_record.dockhand[0].name == "dochand.local.io.vn" &&
+      cloudflare_dns_record.dockhand[0].type == "CNAME" &&
+      cloudflare_dns_record.dockhand[0].content == "local.io.vn" &&
+      cloudflare_dns_record.dockhand[0].proxied &&
+      cloudflare_dns_record.dockhand[0].ttl == 1 &&
+      cloudflare_dns_record.dockhand[0].zone_id == var.cloudflare_zone_id
+    )
+    error_message = "Public Dockhand must have a proxied CNAME for the same hostname as its router."
   }
 }
 
@@ -209,16 +245,18 @@ run "traefik_tls" {
   }
 }
 
-run "dockhand_is_private_and_persistent" {
+run "dockhand_is_networked_and_persistent" {
   command = plan
   module {
     source = "./modules/dockhand"
   }
   variables {
-    name      = "test-dockhand"
-    image     = "fnsys/dockhand:latest"
-    memory_mb = 512
-    cpus      = 0.5
+    name        = "test-dockhand"
+    image       = "fnsys/dockhand:latest"
+    network     = "proxy"
+    main_domain = "local.io.vn"
+    memory_mb   = 512
+    cpus        = 0.5
   }
   assert {
     condition = (
@@ -248,6 +286,50 @@ run "dockhand_is_private_and_persistent" {
       ])
     )
     error_message = "Dockhand data must persist in a named Docker volume."
+  }
+  assert {
+    condition = (
+      length(docker_container.this.networks_advanced) == 1 &&
+      alltrue([for network in docker_container.this.networks_advanced : network.name == "proxy"]) &&
+      contains(docker_container.this.labels, { label = "traefik.enable", value = "true" })
+    )
+    error_message = "Dockhand must always join proxy with Traefik routing enabled."
+  }
+}
+
+run "dockhand_https_router" {
+  command = plan
+  module {
+    source = "./modules/dockhand"
+  }
+  variables {
+    name        = "test-dockhand"
+    main_domain = "local.io.vn"
+    network     = "proxy"
+  }
+  assert {
+    condition = alltrue([
+      for key, value in {
+        "traefik.enable"                                               = "true"
+        "traefik.docker.network"                                       = "proxy"
+        "traefik.http.routers.test-dockhand.rule"                      = "Host(`dochand.local.io.vn`)"
+        "traefik.http.routers.test-dockhand.entrypoints"               = "websecure"
+        "traefik.http.routers.test-dockhand.tls"                       = "true"
+        "traefik.http.routers.test-dockhand.tls.certresolver"          = "letsencrypt"
+        "traefik.http.routers.test-dockhand.service"                   = "test-dockhand"
+        "traefik.http.services.test-dockhand.loadbalancer.server.port" = "3000"
+      } : contains(docker_container.this.labels, { label = key, value = value })
+    ])
+    error_message = "Dockhand must use the requested hostname, HTTPS resolver and internal port 3000."
+  }
+  assert {
+    condition = (
+      length(docker_container.this.networks_advanced) == 1 &&
+      anytrue([for network in docker_container.this.networks_advanced : network.name == "proxy"]) &&
+      alltrue([for port in docker_container.this.ports : port.ip == "127.0.0.1"]) &&
+      output.hostname == "dochand.local.io.vn"
+    )
+    error_message = "Dockhand must share the Traefik network without publishing an external application port."
   }
 }
 

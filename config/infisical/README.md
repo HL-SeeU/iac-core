@@ -53,8 +53,8 @@ Optional infrastructure configuration:
 | `TF_VAR_ssh_host_key` | Optional explicitly pinned key matching known_hosts |
 | `TF_VAR_ssh_host_key_check` | `true`; set `false` only temporarily for SSH diagnostics (disables server identity verification) |
 | `TF_VAR_acme_ca_server` | Let's Encrypt staging directory URL |
-| `TF_VAR_cloudflare_dns_enabled` | `false`; set `true` to manage one proxied A record for the main domain |
-| `TF_VAR_cloudflare_main_domain` | Main domain for the Traefik A record, e.g. `example.com` |
+| `TF_VAR_cloudflare_dns_enabled` | Set `true` to manage the proxied main-domain A record and its `www` CNAME |
+| `TF_VAR_cloudflare_main_domain` | Required main domain for the Dockhand hostname and Traefik A record, e.g. `example.com` |
 | `TF_VAR_cloudflare_zone_id` | 32-character Cloudflare zone ID for the main domain |
 | `TF_VAR_postgres_image` | `postgres:17-bookworm` |
 | `TF_VAR_database_memory_mb` | `1024` |
@@ -63,8 +63,12 @@ Optional infrastructure configuration:
 When Cloudflare DNS is enabled, add `CLOUDFLARE_API_TOKEN` to this Infisical
 path. Scope it to the selected zone with **Zone:DNS:Edit** and **Zone:Zone:Read**
 permissions. The single A record points `cloudflare_main_domain` to the public
-IPv4 in `TF_VAR_ssh_host` and is proxied by Cloudflare. It does not create DNS
-records for app subdomains; manage those separately. Leave DNS disabled until
+IPv4 in `TF_VAR_ssh_host` and is proxied by Cloudflare. A proxied CNAME maps
+`www.<main-domain>` to the main domain. Another proxied CNAME maps
+`dochand.<main-domain>` to the main domain. Dockhand's Traefik HTTPS route is
+always enabled, independently of DNS management. Provide the main domain even
+if managing DNS manually. No other app subdomain records are created; manage those
+separately. Leave DNS disabled until
 the domain, zone ID and token are configured.
 
 The Traefik image defaults to `traefik:v3.6` in

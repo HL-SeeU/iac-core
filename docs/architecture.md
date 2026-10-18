@@ -13,7 +13,7 @@
 | Schema migrations | Service release pipeline |
 | Host password/token file delivery | Infisical-loaded ephemeral Terraform inputs |
 | State and locking | One Terraform Cloud workspace, Local execution mode |
-| Docker administration UI | Dockhand on loopback, accessed through an SSH tunnel |
+| Docker administration UI | Dockhand with an always-enabled Traefik HTTPS route and loopback maintenance port |
 
 SSH connects the runner to the **Docker host**, not to each container. Child
 modules declare the same Docker provider source and inherit the root provider.
@@ -24,8 +24,13 @@ ensures Docker exists/runs before init/apply, avoiding that refresh-order trap.
 
 ## Network boundaries
 
-Traefik joins the proxy network. Apps join proxy and, optionally, the internal
-database network. PostgreSQL joins only the internal network. Apps can reach
+Traefik and Dockhand always join the proxy network. Traefik always routes the
+Dockhand `dochand` hostname over HTTPS. Authentication must be configured
+before allowing public access; DNS management does not gate the router.
+It retains its loopback-only maintenance port and never joins the database
+network. No external authentication or IP allowlist is automatically installed.
+Apps join proxy and, optionally, the internal database network.
+PostgreSQL joins only the internal network. Apps can reach
 Infisical and external APIs through proxy; disabling `database_access` removes
 the database network attachment. This shared database network is not per-service
 network isolation: use separate networks/instances if that is required.
@@ -63,7 +68,7 @@ application readiness; database and Traefik healthchecks are always configured.
 ## Deliberately not included
 
 - VM creation, firewall changes, automatic OS/Docker upgrades.
-- Arbitrary Docker Compose conversion or a public administration dashboard.
+- Arbitrary Docker Compose conversion or a public Traefik administration dashboard.
 - Service image builds or automatic machine-identity token issuance.
 - Automatic migrations or a backup scheduler/retention policy.
 - Traefik file-provider configuration: labels are sufficient for this scaffold.

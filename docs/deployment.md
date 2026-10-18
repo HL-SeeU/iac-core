@@ -58,8 +58,11 @@ No `-target` or separate bootstrap apply is used.
    record for the main domain, set `TF_VAR_cloudflare_dns_enabled=true`, provide
    `TF_VAR_cloudflare_main_domain`, `TF_VAR_cloudflare_zone_id` and the scoped
    `CLOUDFLARE_API_TOKEN` in Infisical. The record points at the public IPv4 in
-   `TF_VAR_ssh_host` and is proxied; app subdomain records remain separately
-   managed. If the A record already exists, import it before enabling Terraform
+   `TF_VAR_ssh_host` and is proxied. A proxied `www` CNAME points to the main
+   domain; other app subdomain records remain separately managed.
+   DNS does not add a Traefik router or an HTTP redirect: configure routing and
+   certificates for both hostnames if both should serve an app.
+   If either record already exists, import it before enabling Terraform
    management. Test with ACME staging, then set
    `TF_VAR_acme_ca_server=https://acme-v02.api.letsencrypt.org/directory` in
    Infisical and apply. Verify served certificates after switching; staging

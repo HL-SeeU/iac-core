@@ -62,11 +62,13 @@ Native `apply` does not perform `init` or load Infisical by itself. Use the wrap
 in CI or when the daemon is missing but existing Docker resources are in state:
 Terraform refresh happens before create-time provisioners.
 
-## Private Dockhand administration
+## Dockhand administration
 
-Terraform deploys Dockhand on the VM with its web port bound only to
-`127.0.0.1:3000`; it is not routed through Traefik or exposed on the public
-interface. Start an SSH tunnel from your workstation:
+Terraform deploys Dockhand on the VM, always attached to the Traefik proxy
+network and routed over HTTPS at `dochand.<cloudflare_main_domain>`.
+Provide `TF_VAR_cloudflare_main_domain` even if managing DNS manually.
+Its direct host web port remains bound only to `127.0.0.1:3000` for maintenance.
+To access that maintenance port, start an SSH tunnel from your workstation:
 
 ```bash
 ssh -N -L 3000:127.0.0.1:3000 -p SSH_PORT SSH_USER@SSH_HOST
@@ -76,9 +78,29 @@ Then open `http://127.0.0.1:3000`. On first launch, enable authentication and
 create the administrator in Dockhand's **Settings > Authentication** before
 using the UI. Keep the tunnel open while using it.
 
+When Cloudflare DNS management is enabled, Terraform creates a proxied CNAME
+for `dochand.<cloudflare_main_domain>`. Otherwise create its DNS record manually.
+The HTTPS router to container port 3000 is always enabled.
+The spelling `dochand` is intentional; its module default is `sub_domain`.
+The loopback port remains available for maintenance. No IP allowlist or
+external authentication middleware is added. The UI is publicly reachable when
+DNS and TLS are ready; do not expose an unauthenticated installation.
+For initial setup, restrict ingress externally and enable authentication through
+the SSH tunnel before allowing public access. Prefer an external authentication
+layer such as Cloudflare Access for production.
+
+Traefik requests and renews certificates using its existing Let's Encrypt
+HTTP-01 resolver. Allow inbound port 80 for validation and port 443 for HTTPS.
+Staging certificates are not trusted: set
+`TF_VAR_acme_ca_server=https://acme-v02.api.letsencrypt.org/directory`
+for a publicly trusted certificate, and use Cloudflare **Full (strict)** once
+the origin certificate is issued. Do not use Flexible mode or disable TLS
+verification to work around certificate errors. Import existing DNS records
+before applying if `dochand.<main-domain>` already exists.
+
 Dockhand mounts the Docker socket and runs as root so it can manage containers.
 This grants it effectively root-equivalent control of the VM; the read-only
-socket mount does not restrict Docker API operations. Keep access private and
+socket mount does not restrict Docker API operations. Restrict access and
 use a reviewed Dockhand image version for repeatable deployments. Dockhand's
 BSL 1.1 license has restrictions for commercial production use; review its
 [current license](https://github.com/Finsys/dockhand/blob/main/LICENSE.txt)

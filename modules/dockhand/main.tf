@@ -19,6 +19,28 @@ resource "docker_container" "this" {
   memory  = var.memory_mb
   cpus    = tostring(var.cpus)
 
+  networks_advanced {
+    name = var.network
+  }
+
+  dynamic "labels" {
+    for_each = {
+      "traefik.enable"                                               = "true"
+      "traefik.docker.network"                                       = var.network
+      "traefik.http.routers.${var.name}.rule"                        = "Host(`${var.sub_domain}.${var.main_domain}`)"
+      "traefik.http.routers.${var.name}.entrypoints"                 = "websecure"
+      "traefik.http.routers.${var.name}.tls"                         = "true"
+      "traefik.http.routers.${var.name}.tls.certresolver"            = "letsencrypt"
+      "traefik.http.routers.${var.name}.service"                     = var.name
+      "traefik.http.services.${var.name}.loadbalancer.server.port"   = "3000"
+      "traefik.http.services.${var.name}.loadbalancer.server.scheme" = "http"
+    }
+    content {
+      label = labels.key
+      value = labels.value
+    }
+  }
+
   ports {
     internal = 3000
     external = 3000

@@ -18,3 +18,27 @@ resource "cloudflare_dns_record" "traefik_main_domain" {
 
   depends_on = [module.traefik]
 }
+
+resource "cloudflare_dns_record" "traefik_www" {
+  count = var.cloudflare_dns_enabled ? 1 : 0
+
+  zone_id = var.cloudflare_zone_id
+  name    = "www.${var.cloudflare_main_domain}"
+  type    = "CNAME"
+  content = cloudflare_dns_record.traefik_main_domain[0].name
+  ttl     = 1
+  proxied = true
+  comment = "Terraform-managed www alias for Traefik"
+}
+
+resource "cloudflare_dns_record" "dockhand" {
+  count = var.cloudflare_dns_enabled ? 1 : 0
+
+  zone_id = var.cloudflare_zone_id
+  name    = module.dockhand.hostname
+  type    = "CNAME"
+  content = cloudflare_dns_record.traefik_main_domain[0].name
+  ttl     = 1
+  proxied = true
+  comment = "Terraform-managed Dockhand HTTPS hostname"
+}
