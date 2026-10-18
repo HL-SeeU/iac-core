@@ -29,6 +29,8 @@ jobs:
         run: bash tests/operations.sh
       - name: Test Infisical runner and preflight without SSH or cloud access
         run: bash tests/runner.sh
+      - name: Test Traefik file synchronization without SSH
+        run: bash tests/traefik-config.sh
       - name: Validate database manifest
         run: jq -e '.services | type == "array" and length > 0' config/database/services.yaml >/dev/null
       - name: Validate and test the single root module

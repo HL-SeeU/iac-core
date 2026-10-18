@@ -3,6 +3,11 @@ output "docker_host" {
   description = "Docker provider endpoint."
 }
 
+output "mysql_endpoint" {
+  value       = "${var.ssh_host}:${local.traefik_tcp_entrypoints.mysql}"
+  description = "Public TCP endpoint proxied by Traefik to the external MySQL database."
+}
+
 output "database_container" {
   value       = module.database.name
   description = "Container name for host-side database operations."

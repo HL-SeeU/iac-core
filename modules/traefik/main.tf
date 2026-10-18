@@ -33,7 +33,12 @@ resource "docker_container" "this" {
     "--certificatesresolvers.letsencrypt.acme.caserver=${var.acme_ca_server}",
     "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web",
     "--ping=true",
-    ], var.observability_enabled ? [
+    ], [
+    for name, port in var.tcp_entrypoints : "--entrypoints.${name}.address=:${port}"
+    ], var.dynamic_config_directory != null ? [
+    "--providers.file.directory=/etc/traefik/dynamic",
+    "--providers.file.watch=true",
+    ] : [], var.observability_enabled ? [
     "--accesslog=true",
     "--accesslog.format=json",
     "--accesslog.fields.defaultmode=drop",
@@ -67,6 +72,26 @@ resource "docker_container" "this" {
   ports {
     internal = 443
     external = 443
+  }
+
+  dynamic "ports" {
+    for_each = var.tcp_entrypoints
+    content {
+      internal = ports.value
+      external = ports.value
+      ip       = "0.0.0.0"
+      protocol = "tcp"
+    }
+  }
+
+  dynamic "mounts" {
+    for_each = var.dynamic_config_directory != null ? [var.dynamic_config_directory] : []
+    content {
+      type      = "bind"
+      source    = mounts.value
+      target    = "/etc/traefik/dynamic"
+      read_only = true
+    }
   }
 
   mounts {

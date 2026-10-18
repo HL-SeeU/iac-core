@@ -81,6 +81,67 @@ With Cloudflare DNS enabled, Terraform creates the proxied `proxy` CNAME;
 otherwise create the DNS record manually. Use a production Let's Encrypt
 certificate and Cloudflare Full (strict) as described below for Dockhand.
 
+## External MySQL TCP proxy
+
+The root configures Traefik to forward `<ssh_host>:3306` to the existing OCI
+database at `10.0.0.91:3306`. The `mysql_endpoint` output shows the client endpoint.
+This is separate from the internal PostgreSQL container and does not change
+HTTP/HTTPS routes. The reusable Traefik module contains no MySQL-specific
+configuration; its additional listeners and file provider are disabled by default.
+
+### Adding ports and services
+
+- Define additional TCP entrypoints in `local.traefik_tcp_entrypoints` in
+  [traefik.tf](traefik.tf). The module generates both listener arguments and
+  Docker port mappings from this map. For example, add `redis = 6379` alongside
+  `mysql = 3306`; built-in entrypoint names and ports are reserved.
+- Add or edit top-level `.yml`/`.yaml` files in
+  [config/traefik/dynamic](config/traefik/dynamic). These are standard Traefik
+  dynamic configurations and can contain TCP or HTTP routers/services.
+  [mysql.yml](config/traefik/dynamic/mysql.yml) defines the current MySQL backend.
+  Each router must reference an existing entrypoint, and router/service names
+  must be unique across files.
+- Run the normal Terraform deployment. Root provisioning uploads the files over
+  SSH into `<host_root>/traefik/dynamic` before Traefik starts. That directory is
+  reserved for these managed YAML files: removed repository files are removed
+  from the VM on the next apply. Keep secrets out of this configuration.
+
+The module mounts the entire directory read-only and enables file-provider
+watching. Backend/router changes are synchronized using atomic per-file renames
+without replacing the mounted directory, allowing Traefik to reload without
+container replacement. Unchanged files are not rewritten. Updates spanning
+multiple files are not transactional; keep tightly coupled routes/services in
+one file. YAML syntax is checked at plan time; validate actual routing after
+deployment because syntax validation does not verify all Traefik semantics.
+
+Changing entrypoints or published ports still recreates Traefik and briefly
+interrupts proxy traffic. Migrating from the former embedded MySQL configuration
+also recreates Traefik once to switch to the directory provider. No manual file
+creation on the VM is required. Ensure new host ports are not already in use and
+open their OCI ingress rules separately.
+
+Local checks: `terraform test -filter=tests/mysql-proxy.tftest.hcl` and
+`bash tests/traefik-config.sh` (Linux, WSL or Git Bash).
+
+Allow inbound TCP destination port 3306 to the VM in its OCI NSG/Security List
+and any applicable host/container firewall rules. Allow the VM to reach the
+database on TCP 3306. A successful `nc -vz 10.0.0.91 3306` on the VM verifies
+host connectivity; the Traefik Docker network must also have outbound access.
+The listener binds to all IPv4 host interfaces, not `ssh_host`: OCI public IPs
+are normally NAT mappings rather than addresses assigned to the Linux interface.
+
+From an external client, test the complete path with:
+
+```bash
+mysql --protocol=TCP --host=VM_PUBLIC_IP --port=3306 --user=DB_USER --password
+```
+
+Use the database's existing credentials and grants, then run `SELECT 1;`.
+Traefik forwards raw TCP without TLS termination; MySQL TLS, if configured,
+is negotiated directly between the client and database. No HTTP routing or
+Let's Encrypt certificate is involved. Use the VM public IP directly or a
+DNS-only record, not a standard Cloudflare-proxied record.
+
 ## Dockhand administration
 
 Terraform deploys Dockhand on the VM, always attached to the Traefik proxy

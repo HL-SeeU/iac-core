@@ -1,15 +1,17 @@
 module "traefik" {
   source = "./modules/traefik"
 
-  name                  = "${var.name_prefix}-traefik"
-  network               = docker_network.proxy.name
-  acme_email            = var.acme_email
-  acme_ca_server        = var.acme_ca_server
-  main_domain           = var.cloudflare_main_domain
-  observability_enabled = module.observability.enabled
-  tracing_endpoint      = module.observability.tracing_endpoint
+  name                     = "${var.name_prefix}-traefik"
+  network                  = docker_network.proxy.name
+  acme_email               = var.acme_email
+  acme_ca_server           = var.acme_ca_server
+  main_domain              = var.cloudflare_main_domain
+  observability_enabled    = module.observability.enabled
+  tracing_endpoint         = module.observability.tracing_endpoint
+  tcp_entrypoints          = local.traefik_tcp_entrypoints
+  dynamic_config_directory = local.traefik_dynamic_directory
 
-  depends_on = [terraform_data.host]
+  depends_on = [terraform_data.host, terraform_data.traefik_files]
 }
 
 module "database" {
