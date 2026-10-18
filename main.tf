@@ -3,6 +3,7 @@ module "traefik" {
 
   name                     = "${var.name_prefix}-traefik"
   network                  = docker_network.proxy.name
+  trusted_proxy_cidrs      = local.cloudflare_proxy_cidrs
   acme_email               = var.acme_email
   acme_ca_server           = var.acme_ca_server
   main_domain              = var.cloudflare_main_domain

@@ -81,6 +81,36 @@ With Cloudflare DNS enabled, Terraform creates the proxied `proxy` CNAME;
 otherwise create the DNS record manually. Use a production Let's Encrypt
 certificate and Cloudflare Full (strict) as described below for Dockhand.
 
+## HTTPS rate limiting
+
+All HTTP routers on Traefik's `websecure` entrypoint, including the dashboard
+and Dockhand, inherit a rate-limit middleware: average **100 requests/second**
+per client IP, with a token-bucket capacity (`burst`) of **200**. Excess requests
+receive HTTP **429**. This is a default policy per router, not a shared global
+quota across all services. Router-specific middleware can add tighter limits.
+TCP listeners such as MySQL and the HTTP-to-HTTPS redirect are unchanged.
+
+The root deployment assumes **Cloudflare proxy -> Traefik** with no additional
+proxy hop. It trusts forwarded headers only from the Cloudflare IPv4/IPv6 CIDRs
+in [traefik.tf](traefik.tf), and selects the rightmost `X-Forwarded-For` address
+for rate limiting. Keep these ranges synchronized with
+[Cloudflare's published list](https://www.cloudflare.com/ips/). Do not enable
+insecure forwarded-header trust. If the proxy chain changes (for example, to
+Cloudflare Tunnel), review both trusted CIDRs and the IP-selection strategy.
+
+This does not restrict origin access: direct, untrusted requests have forwarded
+headers stripped and, with the one-hop strategy, share the empty-IP bucket.
+Restrict origin web access to Cloudflare at the firewall to prevent bypassing
+its edge protection; review ACME HTTP-01 reachability before doing so. Reusable
+module callers without `trusted_proxy_cidrs` use the connection IP instead.
+Rate limiting is not volumetric DDoS protection or dashboard authentication.
+
+Applying the new entrypoint arguments recreates Traefik and briefly interrupts
+proxy traffic. After deployment, verify real client IP separation and HTTP 429
+responses through Cloudflare, and monitor application latency and resource use.
+Local configuration checks:
+`terraform test -filter=tests/traefik-ratelimit.tftest.hcl`.
+
 ## External MySQL TCP proxy
 
 The root configures Traefik to forward `<ssh_host>:3306` to the existing OCI

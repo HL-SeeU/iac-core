@@ -12,6 +12,17 @@ variable "network" {
   type = string
 }
 
+variable "trusted_proxy_cidrs" {
+  type        = list(string)
+  default     = []
+  nullable    = false
+  description = "Trusted direct reverse-proxy CIDRs. When set, HTTPS rate limiting uses the rightmost X-Forwarded-For IP (one proxy hop)."
+  validation {
+    condition     = alltrue([for cidr in var.trusted_proxy_cidrs : can(cidrhost(cidr, 0))])
+    error_message = "trusted_proxy_cidrs must contain valid IPv4 or IPv6 CIDRs."
+  }
+}
+
 variable "tcp_entrypoints" {
   type        = map(number)
   default     = {}

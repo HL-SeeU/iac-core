@@ -26,6 +26,7 @@ resource "docker_container" "this" {
     "--providers.docker.network=${var.network}",
     "--entrypoints.web.address=:80",
     "--entrypoints.websecure.address=:443",
+    "--entrypoints.websecure.http.middlewares=${var.name}-global-limit@docker",
     "--entrypoints.web.http.redirections.entrypoint.to=websecure",
     "--entrypoints.web.http.redirections.entrypoint.scheme=https",
     "--certificatesresolvers.letsencrypt.acme.email=${var.acme_email}",
@@ -35,7 +36,9 @@ resource "docker_container" "this" {
     "--ping=true",
     ], [
     for name, port in var.tcp_entrypoints : "--entrypoints.${name}.address=:${port}"
-    ], var.dynamic_config_directory != null ? [
+    ], length(var.trusted_proxy_cidrs) > 0 ? [
+    "--entrypoints.websecure.forwardedheaders.trustedips=${join(",", var.trusted_proxy_cidrs)}",
+    ] : [], var.dynamic_config_directory != null ? [
     "--providers.file.directory=/etc/traefik/dynamic",
     "--providers.file.watch=true",
     ] : [], var.observability_enabled ? [
@@ -107,15 +110,20 @@ resource "docker_container" "this" {
   }
 
   dynamic "labels" {
-    for_each = {
-      "traefik.enable"                                              = "true"
-      "traefik.docker.network"                                      = var.network
-      "traefik.http.routers.${var.name}-dashboard.rule"             = "Host(`proxy.${var.main_domain}`)"
-      "traefik.http.routers.${var.name}-dashboard.entrypoints"      = "websecure"
-      "traefik.http.routers.${var.name}-dashboard.tls"              = "true"
-      "traefik.http.routers.${var.name}-dashboard.tls.certresolver" = "letsencrypt"
-      "traefik.http.routers.${var.name}-dashboard.service"          = "api@internal"
-    }
+    for_each = merge({
+      "traefik.enable"                                                      = "true"
+      "traefik.docker.network"                                              = var.network
+      "traefik.http.middlewares.${var.name}-global-limit.ratelimit.average" = "100"
+      "traefik.http.middlewares.${var.name}-global-limit.ratelimit.period"  = "1s"
+      "traefik.http.middlewares.${var.name}-global-limit.ratelimit.burst"   = "200"
+      "traefik.http.routers.${var.name}-dashboard.rule"                     = "Host(`proxy.${var.main_domain}`)"
+      "traefik.http.routers.${var.name}-dashboard.entrypoints"              = "websecure"
+      "traefik.http.routers.${var.name}-dashboard.tls"                      = "true"
+      "traefik.http.routers.${var.name}-dashboard.tls.certresolver"         = "letsencrypt"
+      "traefik.http.routers.${var.name}-dashboard.service"                  = "api@internal"
+      }, length(var.trusted_proxy_cidrs) > 0 ? {
+      "traefik.http.middlewares.${var.name}-global-limit.ratelimit.sourcecriterion.ipstrategy.depth" = "1"
+    } : {})
     content {
       label = labels.key
       value = labels.value
