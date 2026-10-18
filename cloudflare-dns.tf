@@ -24,7 +24,7 @@ resource "cloudflare_dns_record" "traefik_www" {
 
   zone_id = var.cloudflare_zone_id
   name    = "www.${var.cloudflare_main_domain}"
-  type    = "CNAME"
+  type    = "A"
   content = cloudflare_dns_record.traefik_main_domain[0].name
   ttl     = 1
   proxied = true
@@ -41,4 +41,16 @@ resource "cloudflare_dns_record" "dockhand" {
   ttl     = 1
   proxied = true
   comment = "Terraform-managed Dockhand HTTPS hostname"
+}
+
+resource "cloudflare_dns_record" "traefik_dashboard" {
+  count = var.cloudflare_dns_enabled ? 1 : 0
+
+  zone_id = var.cloudflare_zone_id
+  name    = module.traefik.dashboard_hostname
+  type    = "CNAME"
+  content = cloudflare_dns_record.traefik_main_domain[0].name
+  ttl     = 1
+  proxied = true
+  comment = "Terraform-managed authenticated Traefik dashboard"
 }

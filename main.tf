@@ -1,12 +1,15 @@
 module "traefik" {
   source = "./modules/traefik"
 
-  name           = "${var.name_prefix}-traefik"
-  network        = docker_network.proxy.name
-  acme_email     = var.acme_email
-  acme_ca_server = var.acme_ca_server
+  name                 = "${var.name_prefix}-traefik"
+  network              = docker_network.proxy.name
+  acme_email           = var.acme_email
+  acme_ca_server       = var.acme_ca_server
+  main_domain          = var.cloudflare_main_domain
+  dashboard_users_file = "${var.host_root}/secrets/traefik-dashboard-users"
+  credentials_revision = terraform_data.traefik_dashboard_secret.id
 
-  depends_on = [terraform_data.host]
+  depends_on = [terraform_data.traefik_dashboard_secret]
 }
 
 module "database" {

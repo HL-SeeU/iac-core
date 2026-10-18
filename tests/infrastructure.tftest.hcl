@@ -2,13 +2,14 @@ mock_provider "docker" {}
 mock_provider "cloudflare" {}
 
 variables {
-  cloudflare_dns_enabled = false
-  cloudflare_main_domain = "local.io.vn"
-  ssh_host               = "vm.example.com"
-  ssh_user               = "deploy"
-  acme_email             = "ops@example.com"
-  ssh_host_key           = "ssh-ed25519 dGVzdA=="
-  postgres_password      = "ephemeral-test-password"
+  cloudflare_dns_enabled  = false
+  cloudflare_main_domain  = "local.io.vn"
+  ssh_host                = "vm.example.com"
+  ssh_user                = "deploy"
+  acme_email              = "ops@example.com"
+  ssh_host_key            = "ssh-ed25519 dGVzdA=="
+  postgres_password       = "ephemeral-test-password"
+  traefik_dashboard_users = format("admin:$2y$12$%s", join("", [for i in range(53) : "a"]))
   app_infisical_tokens = {
     service-a = "ephemeral-service-a-token"
     service-b = "ephemeral-service-b-token"
@@ -222,10 +223,13 @@ run "traefik_tls" {
   }
 
   variables {
-    name           = "test-traefik"
-    network        = "proxy"
-    acme_email     = "ops@example.com"
-    acme_ca_server = "https://acme-staging-v02.api.letsencrypt.org/directory"
+    name                 = "test-traefik"
+    network              = "proxy"
+    acme_email           = "ops@example.com"
+    acme_ca_server       = "https://acme-staging-v02.api.letsencrypt.org/directory"
+    main_domain          = "local.io.vn"
+    dashboard_users_file = "/opt/iac-core/secrets/traefik-dashboard-users"
+    credentials_revision = "1"
   }
   assert {
     condition     = docker_image.this.name == "traefik:v3.6"
@@ -234,15 +238,64 @@ run "traefik_tls" {
   assert {
     condition = (
       contains(docker_container.this.command, "--providers.docker.exposedbydefault=false") &&
-      contains(docker_container.this.command, "--api.dashboard=false") &&
+      contains(docker_container.this.command, "--api.dashboard=true") &&
+      contains(docker_container.this.command, "--api.insecure=false") &&
       contains(docker_container.this.command, "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web")
     )
-    error_message = "Traefik must use opt-in routing, no dashboard, and HTTP-01 certificates."
+    error_message = "Traefik must use opt-in routing, a secure dashboard, and HTTP-01 certificates."
   }
   assert {
     condition     = toset([for port in docker_container.this.ports : port.external]) == toset([80, 443])
     error_message = "Only HTTP and HTTPS should be published."
   }
+  assert {
+    condition = alltrue([
+      for key, value in {
+        "traefik.http.routers.test-traefik-dashboard.rule"                         = "Host(`proxy.local.io.vn`)"
+        "traefik.http.routers.test-traefik-dashboard.entrypoints"                  = "websecure"
+        "traefik.http.routers.test-traefik-dashboard.tls"                          = "true"
+        "traefik.http.routers.test-traefik-dashboard.tls.certresolver"             = "letsencrypt"
+        "traefik.http.routers.test-traefik-dashboard.service"                      = "api@internal"
+        "traefik.http.routers.test-traefik-dashboard.middlewares"                  = "test-traefik-dashboard-auth"
+        "traefik.http.middlewares.test-traefik-dashboard-auth.basicauth.usersfile" = "/run/secrets/dashboard-users"
+      } : contains(docker_container.this.labels, { label = key, value = value })
+    ])
+    error_message = "The dashboard API and UI must share the authenticated HTTPS router."
+  }
+  assert {
+    condition = anytrue([
+      for mount in docker_container.this.mounts :
+      mount.source == var.dashboard_users_file && mount.target == "/run/secrets/dashboard-users" && mount.read_only
+    ])
+    error_message = "Dashboard credentials must be mounted from a read-only host file."
+  }
+}
+
+run "dashboard_dns" {
+  command = plan
+  variables {
+    cloudflare_dns_enabled = true
+    cloudflare_main_domain = "local.io.vn"
+    cloudflare_zone_id     = "1234567890abcdef1234567890abcdef"
+    ssh_host               = "203.0.113.10"
+  }
+  assert {
+    condition = (
+      cloudflare_dns_record.traefik_dashboard[0].name == "proxy.local.io.vn" &&
+      cloudflare_dns_record.traefik_dashboard[0].type == "CNAME" &&
+      cloudflare_dns_record.traefik_dashboard[0].content == "local.io.vn" &&
+      cloudflare_dns_record.traefik_dashboard[0].proxied
+    )
+    error_message = "The proxy hostname must have a proxied CNAME pointing to the main domain."
+  }
+}
+
+run "dashboard_rejects_plaintext_password" {
+  command = plan
+  variables {
+    traefik_dashboard_users = "admin:plaintext"
+  }
+  expect_failures = [var.traefik_dashboard_users]
 }
 
 run "dockhand_is_networked_and_persistent" {

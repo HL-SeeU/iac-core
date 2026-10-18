@@ -19,7 +19,8 @@ resource "docker_container" "this" {
   cpus    = "2.0"
 
   command = [
-    "--api.dashboard=false",
+    "--api.dashboard=true",
+    "--api.insecure=false",
     "--providers.docker=true",
     "--providers.docker.exposedbydefault=false",
     "--providers.docker.network=${var.network}",
@@ -56,6 +57,32 @@ resource "docker_container" "this" {
     container_path = "/letsencrypt"
   }
 
+  mounts {
+    type      = "bind"
+    source    = var.dashboard_users_file
+    target    = "/run/secrets/dashboard-users"
+    read_only = true
+  }
+
+  dynamic "labels" {
+    for_each = {
+      "traefik.enable"                                                             = "true"
+      "traefik.docker.network"                                                     = var.network
+      "traefik.http.routers.${var.name}-dashboard.rule"                            = "Host(`proxy.${var.main_domain}`)"
+      "traefik.http.routers.${var.name}-dashboard.entrypoints"                     = "websecure"
+      "traefik.http.routers.${var.name}-dashboard.tls"                             = "true"
+      "traefik.http.routers.${var.name}-dashboard.tls.certresolver"                = "letsencrypt"
+      "traefik.http.routers.${var.name}-dashboard.service"                         = "api@internal"
+      "traefik.http.routers.${var.name}-dashboard.middlewares"                     = "${var.name}-dashboard-auth"
+      "traefik.http.middlewares.${var.name}-dashboard-auth.basicauth.usersfile"    = "/run/secrets/dashboard-users"
+      "traefik.http.middlewares.${var.name}-dashboard-auth.basicauth.removeheader" = "true"
+    }
+    content {
+      label = labels.key
+      value = labels.value
+    }
+  }
+
   networks_advanced {
     name = var.network
   }
@@ -71,4 +98,12 @@ resource "docker_container" "this" {
   wait_timeout = 120
   log_driver   = "json-file"
   log_opts     = { "max-size" = "10m", "max-file" = "3" }
+
+  lifecycle {
+    replace_triggered_by = [terraform_data.dashboard_credentials]
+  }
+}
+
+resource "terraform_data" "dashboard_credentials" {
+  triggers_replace = var.credentials_revision
 }

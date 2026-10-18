@@ -68,7 +68,7 @@ application readiness; database and Traefik healthchecks are always configured.
 ## Deliberately not included
 
 - VM creation, firewall changes, automatic OS/Docker upgrades.
-- Arbitrary Docker Compose conversion or a public Traefik administration dashboard.
+- Arbitrary Docker Compose conversion or an unauthenticated Traefik dashboard.
 - Service image builds or automatic machine-identity token issuance.
 - Automatic migrations or a backup scheduler/retention policy.
 - Traefik file-provider configuration: labels are sufficient for this scaffold.

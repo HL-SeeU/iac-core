@@ -35,6 +35,7 @@ Required in environment `prod`, path `/infrastructure`:
 | `SSH_KNOWN_HOSTS` | Full host key entry verified through a trusted channel |
 | `TF_VAR_acme_email` | Let's Encrypt registration email |
 | `TF_VAR_postgres_password` | Non-empty PostgreSQL administrator initialization password |
+| `TF_VAR_traefik_dashboard_users` | Required htpasswd bcrypt content for the HTTPS dashboard, one `username:hash` per line |
 
 `SSH_KNOWN_HOSTS` must match the configured host/port; for a non-default port use
 `[host]:port`. Hashed known_hosts entries are supported by OpenSSH. The runner
@@ -74,6 +75,18 @@ the domain, zone ID and token are configured.
 The Traefik image defaults to `traefik:v3.6` in
 `modules/traefik/variables.tf`; change that module default to select another
 image. Pin a reviewed immutable digest for production.
+
+A proxied `proxy.<main-domain>` CNAME exposes the Traefik dashboard at
+`https://proxy.<main-domain>/dashboard/` behind Basic Auth. Generate the
+`TF_VAR_traefik_dashboard_users` value using `htpasswd -nB admin` on a trusted
+machine with htpasswd installed; it prompts for the password without putting
+it in shell arguments. Store the complete output line in Infisical, with literal
+single `$` characters (not Compose-style `$$`). Terraform validates bcrypt
+format, delivers the file via SSH as root `0600`, and mounts it read-only.
+The ephemeral sensitive input is not persisted in Terraform state or labels.
+Bump `TF_VAR_credentials_revision` after changing the users file to redeliver
+it and recreate Traefik so it remounts the replaced file. This restarts the
+proxy and can briefly interrupt all routed services.
 
 Example `TF_VAR_apps` value (JSON, not HCL):
 
