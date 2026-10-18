@@ -3,7 +3,9 @@ variable "name" {
 }
 
 variable "image" {
-  type = string
+  type        = string
+  default     = "traefik:v3.6"
+  description = "Traefik image; pin to a reviewed digest for production."
 }
 
 variable "network" {

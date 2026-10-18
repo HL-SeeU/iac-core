@@ -10,3 +10,5 @@ provider "docker" {
 }
 
 provider "infisical" {}
+
+provider "cloudflare" {}

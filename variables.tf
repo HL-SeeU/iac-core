@@ -33,12 +33,6 @@ variable "acme_ca_server" {
   description = "Defaults to staging; switch explicitly to production after testing DNS and HTTP-01."
 }
 
-variable "traefik_image" {
-  type        = string
-  default     = "traefik:v3.6"
-  description = "Traefik image; pin to a reviewed digest for production."
-}
-
 variable "postgres_image" {
   type        = string
   default     = "postgres:17-bookworm"

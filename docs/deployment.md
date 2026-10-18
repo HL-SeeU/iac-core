@@ -54,7 +54,13 @@ No `-target` or separate bootstrap apply is used.
    the **same workspace** to create the apps. Use app images containing the
    Infisical CLI, real domains, explicit startup commands and healthchecks.
    Run service migrations from the service release pipeline.
-9. Point DNS to the VM and allow 80/443. Test with ACME staging, then set
+9. Allow inbound 80/443 to the VM. To let Terraform manage one Cloudflare A
+   record for the main domain, set `TF_VAR_cloudflare_dns_enabled=true`, provide
+   `TF_VAR_cloudflare_main_domain`, `TF_VAR_cloudflare_zone_id` and the scoped
+   `CLOUDFLARE_API_TOKEN` in Infisical. The record points at the public IPv4 in
+   `TF_VAR_ssh_host` and is proxied; app subdomain records remain separately
+   managed. If the A record already exists, import it before enabling Terraform
+   management. Test with ACME staging, then set
    `TF_VAR_acme_ca_server=https://acme-v02.api.letsencrypt.org/directory` in
    Infisical and apply. Verify served certificates after switching; staging
    certificates are untrusted. Do not blindly delete the ACME volume.

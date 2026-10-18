@@ -1,4 +1,5 @@
 mock_provider "docker" {}
+mock_provider "cloudflare" {}
 
 variables {
   ssh_host          = "vm.example.com"
@@ -49,6 +50,29 @@ run "runtime_routes" {
   assert {
     condition     = module.apps["service-a"].name == "iac-core-service-a" && output.database_container == "iac-core-postgres"
     error_message = "Resource names must follow the configured prefix."
+  }
+  assert {
+    condition     = length(cloudflare_dns_record.traefik_main_domain) == 0
+    error_message = "Cloudflare DNS must remain disabled unless explicitly enabled."
+  }
+}
+
+run "cloudflare_main_domain_a_record" {
+  command = plan
+  variables {
+    cloudflare_dns_enabled = true
+    cloudflare_main_domain = "local.io.vn"
+    cloudflare_zone_id     = "1234567890abcdef1234567890abcdef"
+    ssh_host               = "203.0.113.10"
+  }
+  assert {
+    condition = (
+      cloudflare_dns_record.traefik_main_domain[0].type == "A" &&
+      cloudflare_dns_record.traefik_main_domain[0].name == "local.io.vn" &&
+      cloudflare_dns_record.traefik_main_domain[0].content == "203.0.113.10" &&
+      cloudflare_dns_record.traefik_main_domain[0].proxied
+    )
+    error_message = "The main domain must resolve through a proxied A record to the VM IPv4."
   }
 }
 
@@ -163,10 +187,13 @@ run "traefik_tls" {
 
   variables {
     name           = "test-traefik"
-    image          = "traefik:v3.6"
     network        = "proxy"
     acme_email     = "ops@example.com"
     acme_ca_server = "https://acme-staging-v02.api.letsencrypt.org/directory"
+  }
+  assert {
+    condition     = docker_image.this.name == "traefik:v3.6"
+    error_message = "Traefik should use the image default declared in its module."
   }
   assert {
     condition = (

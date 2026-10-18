@@ -113,7 +113,7 @@ defaults() {
   export SSH_KNOWN_HOSTS='example.test ssh-ed25519 TRUSTED_KEY'
   export TEST_TRUSTED_HOSTS=$SSH_KNOWN_HOSTS
   unset TF_VAR_apps TF_VAR_app_infisical_tokens TF_VAR_host_root TF_VAR_ssh_host_key
-  unset TF_VAR_ssh_host_key_check
+  unset TF_VAR_ssh_host_key_check TF_VAR_cloudflare_dns_enabled CLOUDFLARE_API_TOKEN
   unset TEST_SSH_FAIL TEST_INIT_FAIL TEST_ADD_FAIL TEST_TF_FAIL
   : > "$work/order"
 }
@@ -161,6 +161,12 @@ expect_failure "missing configuration"
 [[ ! -s $work/order ]]
 defaults; export TF_VAR_ssh_host_key_check=invalid
 expect_failure "invalid host checking flag"
+[[ ! -s $work/order ]]
+defaults; export TF_VAR_cloudflare_dns_enabled=invalid
+expect_failure "invalid Cloudflare DNS enabled flag"
+[[ ! -s $work/order ]]
+defaults; export TF_VAR_cloudflare_dns_enabled=true
+expect_failure "Cloudflare token required when DNS is enabled"
 [[ ! -s $work/order ]]
 defaults; unset SSH_KNOWN_HOSTS
 expect_failure "trusted hosts required by default"

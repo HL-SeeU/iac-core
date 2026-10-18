@@ -25,6 +25,17 @@ prepare_runner() {
   [[ $TF_VAR_ssh_host_key_check == true || $TF_VAR_ssh_host_key_check == false ]] || {
     runner_error "TF_VAR_ssh_host_key_check must be true or false."; return 1;
   }
+  export TF_VAR_cloudflare_dns_enabled=${TF_VAR_cloudflare_dns_enabled:-false}
+  [[ $TF_VAR_cloudflare_dns_enabled == true || $TF_VAR_cloudflare_dns_enabled == false ]] || {
+    runner_error "TF_VAR_cloudflare_dns_enabled must be true or false."; return 1;
+  }
+  if [[ $TF_VAR_cloudflare_dns_enabled == true ]]; then
+    value=${CLOUDFLARE_API_TOKEN:-}
+    [[ -n ${value//[[:space:]]/} ]] || {
+      runner_error "CLOUDFLARE_API_TOKEN is required when Cloudflare DNS is enabled."; return 1;
+    }
+    export CLOUDFLARE_API_TOKEN
+  fi
   for name in TF_CLOUD_ORGANIZATION TF_WORKSPACE TF_TOKEN_app_terraform_io \
     TF_VAR_ssh_host TF_VAR_ssh_user TF_VAR_ssh_port TF_VAR_acme_email \
     TF_VAR_postgres_password VM_SSH_PRIVATE_KEY; do

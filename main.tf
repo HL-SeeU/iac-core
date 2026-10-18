@@ -2,7 +2,6 @@ module "traefik" {
   source = "./modules/traefik"
 
   name           = "${var.name_prefix}-traefik"
-  image          = var.traefik_image
   network        = docker_network.proxy.name
   acme_email     = var.acme_email
   acme_ca_server = var.acme_ca_server
