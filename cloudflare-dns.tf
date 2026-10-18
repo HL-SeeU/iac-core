@@ -25,7 +25,7 @@ resource "cloudflare_dns_record" "traefik_www" {
   zone_id = var.cloudflare_zone_id
   name    = "www.${var.cloudflare_main_domain}"
   type    = "A"
-  content = cloudflare_dns_record.traefik_main_domain[0].name
+  content = var.ssh_host
   ttl     = 1
   proxied = true
   comment = "Terraform-managed www alias for Traefik"
